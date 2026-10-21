@@ -1,0 +1,56 @@
+#pragma once
+
+#include "Function.hpp"
+#include <stdio.h>
+#include <windows.h>
+
+class File
+{
+  public:
+    // or static with explicit __stdcall
+    EXPORT static s32 __stdcall GetFileSize_4A6B10(FILE* Stream);
+
+    EXPORT static bool __stdcall IsCdRomDrive_4A6BB0(char_type a1);
+
+    EXPORT static void __stdcall CheckReadOnlyFile_4A6BE0(const char_type* FileName, s32 expectedSize);
+    EXPORT static void* __stdcall ReadFileToBuffer_4A6C80(const char_type* FileName, u32* a2);
+    EXPORT static size_t __stdcall ReadFileToFixedBuffer_4A6DB0(const char_type* FileName, void* pBuffer, u32* pMaxSize);
+
+    EXPORT static size_t __stdcall Read_4A6D90(void* Buffer, size_t ElementSize, size_t ElementCount, FILE* Stream);
+
+    EXPORT static void __stdcall WriteBufferToFile_4A6E80(const char_type* FileName, void* Buffer, u32* a3);
+
+    EXPORT static size_t __stdcall Write_4A6F30(void* Buffer, size_t ElementSize, size_t ElementCount, FILE* Stream);
+
+    EXPORT static void __stdcall AppendBufferToFile_4A6F50(const char_type* FileName, void* Buffer, u32* a3);
+
+    EXPORT static void __stdcall CreateFile_4A7000(const char_type* FileName);
+
+    EXPORT static void __stdcall Global_Open_4A7060(const char_type* FileName);
+
+    EXPORT static void __stdcall Global_Close_4A70C0();
+
+    EXPORT static void __stdcall Global_Close_UnChecked_4A7110();
+
+    EXPORT static void __stdcall Global_Seek_4A7140(u32* pOffset);
+
+    EXPORT static void __stdcall File_Error_4A7190(s32 Code, s32 a2, s32 a3);
+
+    EXPORT static void __stdcall Global_Read_4A71C0(void* pBuffer, const u32& pBufferSize);
+
+    EXPORT static bool __stdcall Global_Read_4A7210(void* Buffer, u32* pSize);
+
+    EXPORT static size_t __stdcall GetRemainderSize_4A7250(void* Buffer, u32* pMaxFileSize);
+
+    EXPORT static char_type __stdcall SkipWhitespace_4A7340(FILE* Stream);
+};
+
+// Copy protection: a file of the game CD with its expected size
+struct CdCheckFile_84
+{
+    char_type field_0_name[128];
+    u32 field_80_size;
+};
+
+EXTERN_GLOBAL(u16, gCdCheckFileCount_6252E0);
+EXTERN_GLOBAL_ARRAY(CdCheckFile_84, gCdCheckFiles_6252E8, 22);

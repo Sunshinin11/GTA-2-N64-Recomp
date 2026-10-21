@@ -1,0 +1,73 @@
+#pragma once
+
+#include "Function.hpp"
+#include <windows.h>
+
+#if defined(GTA2_PORT) // port: ErrorLog writes to the console
+#include <ostream>
+#define ostream_type std::ostream
+#elif defined(__clang__) || (_MSC_VER <= 1200)
+#include <FSTREAM.H>
+#define ostream_type ostream
+#else
+#include <fstream>
+#define ostream_type std::ostream
+#endif
+
+class ErrorLog
+{
+  public:
+    EXPORT void Open_4D9470(const char_type* path, s32 a3);
+    EXPORT ErrorLog(const char* FileName, int a3);
+    EXPORT void Write_4D9620(const char_type* pMsg);
+    EXPORT void Write_Log_4D9650(const char_type* buffer);
+
+    EXPORT void log_timestamp_4D9540();
+
+    typedef void(__cdecl* TLogLineCallback)(void*);
+    EXPORT void* log_on_line_written_4D9670(TLogLineCallback pCallBack);
+
+    EXPORT void log_intro_4D95A0();
+
+    ErrorLog()
+    {
+    }
+
+    EXPORT ~ErrorLog();
+
+    // Note: Has to use the old/classic ofstream, not the one from the std namespace
+    // although clang-cl preprocessing, bad build options or something is causing field 0x3C to
+    // end up at the wrong offset
+
+#if !defined(__clang__) && (_MSC_VER <= 1200)
+    // VC6: the real classic ofstream (0x3C bytes, checked with sizeof), so the constructor emits
+    // the original's ??0ofstream@@QAE@XZ call and EH frame (ErrorLog::ErrorLog 0x4D94E0)
+    ofstream field_0_ofstr;
+#else
+    // HACK: Isn't a pointer but just done so we can use the var in Write and some other funcs for now
+    struct fake_ofstream
+    {
+      char buffer[0x3C];
+    };
+    fake_ofstream field_0_ofstr; // Crashes standalone
+#endif
+    u8* field_3C_pLen;
+};
+
+EXPORT void __stdcall Error_SetName_4A0770(const char_type* pFileName);
+
+EXPORT void FatalError_4A38C0(s32 Code, const char_type* pSourceFile, s32 lineNo, ...);
+EXPORT void __stdcall FatalDXError_4A3CF0(HRESULT hr, const char_type* pSourceFile, s32 lineNo);
+EXPORT void __stdcall Shutdown_4DA740();
+
+EXPORT void __stdcall GBH_Graphis_DMA_Video_Free_5D9830();
+
+EXTERN_GLOBAL(char_type, gTmpBuffer_67C598[256]);
+EXTERN_GLOBAL(HWND, gHwnd_707F04);
+EXTERN_GLOBAL(char_type, bDestroyed_6F5B70);
+EXTERN_GLOBAL(char_type, gErrStr_67C29C[256]);
+EXTERN_GLOBAL(char_type, gErrStr2_67C3A8[256]);
+
+EXTERN_GLOBAL(ErrorLog, gErrorLog_67C530);
+EXTERN_GLOBAL(ErrorLog, gMiss2Log_6F7698);
+extern ErrorLog gFile_67C530; //EXTERN_GLOBAL(ErrorLog, gFile_67C530);

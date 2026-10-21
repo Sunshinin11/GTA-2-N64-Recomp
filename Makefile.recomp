@@ -1,0 +1,70 @@
+# ROM de teste: motor gta2_re (decomp do GTA 2 PC) compilado para N64 + camada de plataforma (port/n64).
+# Etapa 1: renderer nulo; objetivo e ver o motor inicializar e quanta RAM ele pede.
+#   powershell -File build_recomp.ps1        (ou: make -f Makefile.recomp)
+# Os dados do jogo (freeware) sao copiados de ../gta2_data/data para o DragonFS (uso pessoal).
+BUILD_DIR = build_recomp
+OBJ_DIR   = $(BUILD_DIR)/o
+N64_ROM_SAVETYPE = none
+N64_INST ?= /opt/libdragon
+include $(N64_INST)/include/n64.mk
+N64_CXXFLAGS ?= $(N64_CFLAGS)
+N64_LDFLAGS += --wrap=malloc --wrap=calloc --wrap=realloc
+
+GAME_DATA ?= ../gta2_data/data
+FS_DIR     = filesystem_recomp
+# Arquivos/pastas de dados para o boot (sem diferenciar maiusculas). Ajuste a lista conforme o motor for pedindo (veja o log "fopen(...)").
+DATA_ENTRIES ?= fstyle.sty e.gxt s.gxt bil.gmp bil.sty nyc.gci test1.seq attract keyboard frontend audio/bil.raw audio/bil.sdt audio/fstyle.raw audio/fstyle.sdt \
+                gtaudio/1.wav gtaudio/4.wav gtaudio/5.wav gtaudio/10.wav gtaudio/11.wav \
+                gtaudio/5a.wav gtaudio/10a.wav gtaudio/11a.wav gtaudio/101a.wav
+
+ENGINE := $(shell tr -d '\r' < port/game_srcs.txt)
+ENGINE += registry crt_stubs port_static_init
+PLAT   := win32_n64 dinput_n64 crt_n64 miles_n64 bink_n64 gbh_n64 vid_n64 frame_n64 exports_n64 net_n64 n64_extra game_entry ramfs_n64
+
+ENGINE_OBJS := $(addprefix $(OBJ_DIR)/port/gta2_re/Source/,$(addsuffix .o,$(ENGINE)))
+PLAT_OBJS   := $(addprefix $(OBJ_DIR)/port/n64/,$(addsuffix .o,$(PLAT)))
+OBJS := $(ENGINE_OBJS) $(PLAT_OBJS) $(OBJ_DIR)/port/n64/main_n64.o $(OBJ_DIR)/port/n64/exc_fix.o $(OBJ_DIR)/port/n64/render_n64.o $(OBJ_DIR)/port/n64/audio_n64.o
+
+CXX_STD ?= -std=gnu++17
+CXX_ENGINE = $(CXX_STD) -fshort-wchar -fms-extensions -fpermissive -w -DGTA2_PORT=1 -DN64 -fno-exceptions -fno-rtti \
+             -include port/compat/gcc_compat.h -include port/compat/port_prefix.h \
+             -Iport/compat -Iport/compat_ci -Iport/n64 -Iport/gta2_re/Source -Iport/gta2_re -MMD -MP
+
+# Motor: otimiza por tamanho (a RAM do N64 e o gargalo; o codigo ocupa ~1,9 MB dos 8 MB).
+$(ENGINE_OBJS): N64_CXXFLAGS += -Os
+
+# crt_stubs.cpp usa especificacoes de excecao dinamicas (invalidas em C++17); a camada n64 foi validada em C++14.
+$(OBJ_DIR)/port/gta2_re/Source/crt_stubs.o $(PLAT_OBJS): CXX_STD = -std=gnu++14
+
+$(OBJ_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	@echo "    [CXX] $<"
+	$(N64_CXX) $(N64_CXXFLAGS) $(CXX_ENGINE) -c $< -o $@
+
+$(OBJ_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	@echo "    [CC]  $<"
+	$(N64_CC) $(N64_CFLAGS) -std=gnu11 -MMD -MP -c $< -o $@
+
+stage-data:
+	@bash tools/stage_data.sh "$(GAME_DATA)" "$(FS_DIR)" $(DATA_ENTRIES)
+
+# Regra explicita (vence a regra generica do n64.mk): raiz do DragonFS = $(FS_DIR), entao rom:/data/x.
+$(BUILD_DIR)/gta2_recomp.dfs: stage-data
+	@mkdir -p $(dir $@)
+	@echo "    [DFS] $@"
+	$(N64_MKDFS) $@ $(FS_DIR)
+
+$(BUILD_DIR)/gta2_recomp.elf: $(OBJS)
+
+-include $(OBJS:.o=.d)
+
+gta2_recomp.z64: N64_ROM_TITLE = "GTA2 RECOMP BOOT"
+gta2_recomp.z64: $(BUILD_DIR)/gta2_recomp.dfs
+
+all: gta2_recomp.z64
+
+clean:
+	rm -rf $(BUILD_DIR) gta2_recomp.z64 $(FS_DIR)
+
+.PHONY: all clean stage-data

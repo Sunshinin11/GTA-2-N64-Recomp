@@ -1,0 +1,78 @@
+// Ponte C++ -> C: o main (main_n64.c, libdragon) chama estas funcoes. Replica o que o
+// shell web faz (semear o registro, gta2_start) sem emscripten.
+#include <string.h>
+#include <stdio.h>
+#include <windows.h>
+
+#include "winmain.hpp"
+
+int __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd);
+extern "C" int Gta2Port_RunLoopSlice();
+extern "C" void Gta2Port_StaticInit();
+extern "C" void gta2_port_reg_set_dword(const char* path, const char* name, DWORD value);
+extern "C" void gta2_port_reg_set_string(const char* path, const char* name, const char* value);
+extern "C" void gta2_port_key(int scancode, int vk, int down, int ch);
+extern "C" uint32_t gta2_port_present_count();
+
+namespace
+{
+constexpr int kRunning = 0x7FFFFFFF;
+const char kRegRoot[] = "hklm\\software\\dma design ltd\\gta2";
+
+void SeedRegistry()
+{
+    char path[96];
+    snprintf(path, sizeof(path), "%s\\screen", kRegRoot);
+    gta2_port_reg_set_dword(path, "start_mode", 0);
+    gta2_port_reg_set_dword(path, "do_play_movie", 0); // sem Bink no N64
+    // Controles (scan codes DirectInput), na ordem dos slots do jogo (igual ao port web).
+    static const int controls[] = {0x11, 0x1f, 0x1e, 0x20, 0x26, 0x1c, 0x39, 0x24, 0x25, 0x17, 0x18, 0x19};
+    snprintf(path, sizeof(path), "%s\\control", kRegRoot);
+    for (int i = 0; i < 12; ++i)
+    {
+        char name[8];
+        snprintf(name, sizeof(name), "%d", i);
+        gta2_port_reg_set_dword(path, name, controls[i]);
+    }
+    gta2_port_reg_set_dword("hklm\\software\\freeloader.com\\gta2", "cityinstalled", 2);
+    snprintf(path, sizeof(path), "%s\\debug", kRegRoot);
+    gta2_port_reg_set_dword(path, "skip_trains", 1); // o port web tambem desliga trens (crash conhecido)
+    // Tech demo N64: pula o menu e entra direto na fase "bil" (o script real e' substituido por um minimo, ver ScriptManager)
+    gta2_port_reg_set_dword(path, "skip_frontend", 1);
+    gta2_port_reg_set_string(path, "mapname", "bil.gmp");
+    gta2_port_reg_set_string(path, "stylename", "bil.sty");
+    gta2_port_reg_set_string(path, "scriptname", "bil.scr");
+}
+bool gStarted = false;
+} // namespace
+
+// 0 = rodando; != 0 = o jogo terminou na inicializacao (codigo de saida).
+extern "C" int gta2_game_init(void)
+{
+    SeedRegistry();
+    Gta2Port_StaticInit(); // o que o start-up da CRT original fazia
+    static char cmd[4] = "";
+    const int r = WinMain_5E53F0(reinterpret_cast<HINSTANCE>(0x400000), nullptr, cmd, SW_SHOWNORMAL);
+    if (r != kRunning)
+    {
+        return r ? r : 1;
+    }
+    gStarted = true;
+    return 0;
+}
+
+// -1 = continua; outro valor = codigo de saida do jogo.
+extern "C" int gta2_game_frame(void)
+{
+    return gStarted ? Gta2Port_RunLoopSlice() : 1;
+}
+
+extern "C" void gta2_game_key(int scancode, int vk, int down)
+{
+    gta2_port_key(scancode, vk, down, 0);
+}
+
+extern "C" uint32_t gta2_game_presents(void)
+{
+    return gta2_port_present_count();
+}

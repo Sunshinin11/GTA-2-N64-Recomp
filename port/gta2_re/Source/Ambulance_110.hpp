@@ -1,0 +1,71 @@
+#pragma once
+
+#include "Function.hpp"
+#include "Ped_List_4.hpp"
+
+class Ped;
+class EmergencyCrew_30;
+
+class jawwie_8
+{
+  public:
+    s32 field_0;
+    s32 field_4;
+};
+
+class Ambulance_20
+{
+  public:
+    EXPORT Ambulance_20();
+    EXPORT ~Ambulance_20();
+    EXPORT void ClearTask_4FA7D0();
+    EXPORT void AddPassenger_4FA800(Ped* pPed);
+    EXPORT bool SpawnParamedicCrew_4FA820();
+    EXPORT void EvaluatePickupState_4FA9D0();
+    EXPORT void HandleObjectiveState_4FAAC0();
+    EXPORT void UpdateState_4FB330();
+
+    char_type field_0_target_x;
+    char_type field_1_target_y;
+    char_type field_2_target_z;
+    char_type field_3;
+    EmergencyCrew_30* field_4_paramedics_crew;
+    Ped* field_8;
+    Ped* field_C;
+    Ped_List_4 field_10_patients;
+    char_type field_14_count;
+    char_type field_15;
+    s16 field_16;
+    s32 field_18_in_use;
+    char_type field_1C;
+    char_type field_1D;
+    char_type field_1E;
+    char_type field_1F;
+};
+
+class Ambulance_110
+{
+  public:
+    Ambulance_110()
+    {
+        init_4FA310();
+    }
+
+    EXPORT ~Ambulance_110();
+    EXPORT void init_4FA310();
+    EXPORT bool HandlePedDeath_4FA330(Ped* pDeadPed);
+    EXPORT char_type TryAddPatient_4FA470(Ped* a2);
+    EXPORT Ambulance_20* AllocateTaskSlot_4FA4B0();
+    EXPORT void ProcessPatientQueue_4FA500();
+    EXPORT void AmbulancesService_4FA790();
+
+    char_type field_0;
+    u8 field_1_f8_idx;
+    char_type field_2;
+    char_type field_3;
+    Ped_List_4 field_4_patient_queue;
+    jawwie_8 field_8[25];
+    Ambulance_20 field_D0_tasks[2];
+};
+
+EXTERN_GLOBAL(Ambulance_110*, gAmbulance_110_6F70A8);

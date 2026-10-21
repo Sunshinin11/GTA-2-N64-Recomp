@@ -1,0 +1,1379 @@
+#include "Game_0x40.hpp"
+#include "ped_class.hpp"
+#include "Ambulance_110.hpp"
+#include "InputRecorder_67F8B0.hpp"
+#include "Camera.hpp"
+#include "CarInfo_808.hpp"
+#include "Car_BC.hpp"
+#include "Char_Pool.hpp"
+#include "Cranes.hpp"
+#include "Crushers.hpp"
+#include "Door_4D4.hpp"
+#include "ExplodingScore_100.hpp"
+#include "Firefighters.hpp"
+#include "Fix16_Rect.hpp"
+#include "ScriptStackFramePool_25C.hpp"
+#include "Frontend.hpp"
+#include "Function.hpp"
+#include "Gang.hpp"
+#include "Garage_48.hpp"
+#include "Generators.hpp"
+#include "Globals.hpp"
+#include "CarChaseTaskTable_500.hpp"
+#include "Hud.hpp"
+#include "EmergencyCrewPool_1E0.hpp"
+#include "Light_1D4CC.hpp"
+#include "MapRenderer.hpp"
+#include "Mike_A80.hpp"
+#include "SpriteRenderer_1C.hpp"
+#include "Object_5C.hpp"
+#include "PathFinder_2FD4.hpp"
+#include "Particle_8.hpp"
+#include "Ped.hpp"
+#include "PedGroup.hpp"
+#include "ObjectDefinitions_8CA8.hpp"
+#include "Player.hpp"
+#include "Police_7B8.hpp"
+#include "PublicTransport.hpp"
+#include "SpriteGrid_400.hpp"
+#include "RouteFinder.hpp"
+#include "CollisionSoundQueue_C88.hpp"
+#include "CrimeReportQueue_CC.hpp"
+#include "Taxi_4.hpp"
+#include "TileAnim_2.hpp"
+#include "TrafficLights_194.hpp"
+#include "PedRefTable_7F8.hpp"
+#include "Weapon_8.hpp"
+#include "Explosion_30.hpp"
+#include "char.hpp"
+#include "collide.hpp"
+#include "debug.hpp"
+#include "error.hpp"
+#include "ScriptManager_C1EA8.hpp"
+#include "gbh_graphics.hpp"
+#include "gtx_0x106C.hpp"
+#include "PlyDat_2BC0.hpp"
+#include "GameSession_578.hpp"
+#include "KanjiFont_8EC.hpp"
+#include "map_0x370.hpp"
+#include "registry.hpp"
+#include "rng.hpp"
+#include "root_sound.hpp"
+#include "FpsCounter_54.hpp"
+#include "TextureCache_15D8.hpp"
+#include "sprite.hpp"
+#include "text_0x14.hpp"
+#include "winmain.hpp"
+
+DEFINE_GLOBAL_INIT(Fix16, dword_67DECC, Fix16(5), 0x67DECC);
+DEFINE_GLOBAL_INIT(Fix16, dword_67DFB4, dword_67DECC, 0x67DFB4);
+DEFINE_GLOBAL(s32, gNetworkGameSpeed_7071A0, 0x7071A0);
+DEFINE_GLOBAL(s32, gNetworkPolice_7071B0, 0x7071B0);
+DEFINE_GLOBAL(s32, gCachedScreenDimension_706C58, 0x706C58);
+
+// TODO
+EXTERN_GLOBAL(u32, counter_706C4C);
+EXTERN_GLOBAL(char_type, gLighting_626A09);
+
+DEFINE_GLOBAL(Game_0x40*, gGame_0x40_67E008, 0x67E008);
+
+// TODO: move
+void sub_SetGamma();
+
+MATCH_FUNC(0x4B8BB0)
+s32 Game_0x40::GetFrameDurationMs_4B8BB0()
+{
+    if (bStartNetworkGame_7081F0 == false)
+    {
+        return field_30_bLimitFramerate == false ? 33 : 11;
+    }
+    return field_34_network_frame_ms;
+}
+
+MATCH_FUNC(0x4B8BD0)
+void Game_0x40::ExitGame_4B8BD0(s32 new_timer, s32 exit_type, s8 bonus_type)
+{
+    int timer = field_28_timer;
+    if (timer == -1 || timer > new_timer)
+    {
+        field_28_timer = new_timer;
+        field_2C_game_exit_type = exit_type;
+        gGameSession_67E8E0.SetLevelFinishBonusType_4C5930(bonus_type);
+    }
+}
+
+MATCH_FUNC(0x4B8C00)
+void Game_0x40::ExitGameNoBonus_4B8C00(s32 new_timer, s32 exit_type)
+{
+    ExitGame_4B8BD0(new_timer, exit_type, 0);
+}
+
+MATCH_FUNC(0x4B8C20)
+s8 Game_0x40::UpdateExitTimer_4B8C20()
+{
+    if (field_28_timer == 0)
+    {
+        return 1;
+    }
+
+    if (field_28_timer > 0)
+    {
+        field_28_timer--;
+    }
+
+    return 0;
+}
+
+#ifdef N64
+extern "C" int gta2_n64_heap_check(const char* tag, void* ra);
+#define HC(t) gta2_n64_heap_check(t, 0)
+#else
+#define HC(t)
+#endif
+
+MATCH_FUNC(0x4B8C40)
+void Game_0x40::LoadGameFiles_4B8C40()
+{
+    char_type tmp_array[256];
+
+    gText_0x14_704DFC->Load_5B5E90();
+    HC("apos text");
+    if (bSkip_audio_67D6BE == false)
+    {
+        char_type* style_name = gGameSession_67E8E0.GetStyleName_4C5950();
+        gRoot_sound_66B038.LoadStyle_40EFF0(style_name);
+    }
+
+    char_type* style_name = gGameSession_67E8E0.GetStyleName_4C5950();
+    gGtx_0x106C_703DD4->LoadSty_5AB750(style_name);
+    HC("apos sty");
+
+    char_type* map_name = gGameSession_67E8E0.GetMapName_4C5940();
+    gMap_0x370_6F6268->LoadMap_4E95B0(map_name);
+    HC("apos map");
+
+    gObjectDefinitions_6FCF00->InitDefinitions_534330();
+    HC("apos objdefs");
+
+    gTextureCache_15D8_705064->LoadStyleTextures_5B9350();
+    HC("apos texcache");
+
+    gGameSession_67E8E0.clear_secret_tokens_collected();
+
+    char_type* script_name = gGameSession_67E8E0.GetScriptName_4C5960();
+    gScriptManager_6F8060->Load_512330(script_name);
+    HC("apos script");
+
+    if (strlen(gGameSession_67E8E0.GetDebugStr_4C5970()) != 0)
+    {
+        char_type* debug_str = gGameSession_67E8E0.GetDebugStr_4C5970();
+        gScriptManager_6F8060->LoadSave_511F80(debug_str);
+    }
+
+    strcpy(tmp_array, "data\\");
+    memset(gTmpBuffer_67C598, 0, sizeof(gTmpBuffer_67C598));
+    gRegistry_6FF968.Get_Debug_Setting_586E90("carname", (LPBYTE)gTmpBuffer_67C598, 0x100);
+
+    strcat(tmp_array, gTmpBuffer_67C598);
+
+    if (strcmp(tmp_array, "data\\"))
+    {
+        gCarInfo_808_678098->LoadFromGciFile_454A00(tmp_array);
+    }
+    else
+    {
+        gCarInfo_808_678098->LoadFromGciFile_454A00("data\\nyc.gci");
+    }
+
+    gCar_6C_677930->DistributeCarsByRating_444980();
+
+    if (gKanjiFont_6F5168 != NULL)
+    {
+        gKanjiFont_6F5168->InitGlyphCaches_4D2B40();
+    }
+}
+
+MATCH_FUNC(0x4B8E00)
+void Game_0x40::SetScreenSize_4B8E00(u32 a1, u32 a2)
+{
+    field_38_orf1->field_90_game_camera.SetScreenSize_4361B0(a1, a2);
+    field_38_orf1->field_208_aux_game_camera.SetScreenSize_4361B0(a1, a2);
+    field_38_orf1->field_14C_view_camera.SetScreenSize_4361B0(a1, a2);
+    gHud_2B00_706620->RecalcTextLayout_5D6AB0();
+}
+
+MATCH_FUNC(0x4B8E50)
+void Game_0x40::ApplyNetworkGameSettings_4B8E50()
+{
+    switch (gNetworkGameSpeed_7071A0)
+    {
+        case 0:
+            field_34_network_frame_ms = 50;
+            break;
+
+        case 1:
+            field_34_network_frame_ms = 40;
+            break;
+
+        case 2:
+            field_34_network_frame_ms = 33;
+            break;
+    }
+
+    bSkip_police_67D4F9 = gNetworkPolice_7071B0 == 0;
+}
+
+// TODO: move
+EXTERN_GLOBAL(s32, bStartNetworkGame_7081F0);
+
+DEFINE_GLOBAL(Ped*, gLastTestPed_6787E8, 0x6787E8);
+
+// Gives the player a group of count peds with the given remap
+MATCH_FUNC(0x46DD70)
+EXPORT void __stdcall sub_46DD70(char_type remap, u8 count)
+{
+    Ped* pPlayerPed = gGame_0x40_67E008->field_38_orf1->GetPlayerPed_41D020();
+    PedGroup* pGroup = PedGroup::New_4CB0D0();
+    pGroup->add_ped_leader_4C9B10(pPlayerPed);
+    pGroup->SetCounts_433360(0);
+    pGroup->field_38_group_type = 2;
+
+    gLastTestPed_6787E8 = gPedPool_6787B8->Allocate();
+    gLastTestPed_6787E8->set_occupation_403970(ped_ocupation_enum::bank_robber);
+    gLastTestPed_6787E8->set_remap_433B90(remap);
+    gLastTestPed_6787E8->field_26C_graphic_type = pPlayerPed->field_26C_graphic_type;
+    gLastTestPed_6787E8->SetPedType_403920(5);
+    if (!gLastTestPed_6787E8->AllocCharB4_45C830(pPlayerPed->field_1AC_cam.x, pPlayerPed->field_1AC_cam.y, pPlayerPed->field_1AC_cam.z))
+    // 9.6f: Ped::get_cam_x/get_cam_y/sub_416B50 (inlined, using them changes the code)
+    {
+        gLastTestPed_6787E8->field_168_game_object->SetRemap_46DD50(gLastTestPed_6787E8->get_remap_433BA0());
+    }
+    gLastTestPed_6787E8->set_health_4039A0(100);
+    gLastTestPed_6787E8->SetPedClass_433BC0(ped_class::gang_member_1);
+    pGroup->add_ped_to_end_of_list_4C8F90(gLastTestPed_6787E8);
+    gLastTestPed_6787E8->ForceWeapon_46F600(0);
+
+    for (u8 i = 1; i < count; i++)
+    {
+        Ped* pPed = gPedPool_6787B8->Allocate();
+        pPed->set_occupation_403970(ped_ocupation_enum::bank_robber);
+        pPed->set_remap_433B90(remap);
+        pPed->field_26C_graphic_type = pPlayerPed->field_26C_graphic_type;
+        pPed->SetPedType_403920(5);
+        pPed->AllocCharB4_45C830(pPlayerPed->field_1AC_cam.x, pPlayerPed->field_1AC_cam.y, pPlayerPed->field_1AC_cam.z);
+        pPed->SetRemap_433C10(pPed->get_remap_433BA0());
+        pPed->set_health_4039A0(100);
+        pPed->SetPedClass_433BC0(ped_class::gang_member_1);
+        pGroup->add_ped_to_end_of_list_4C8F90(pPed);
+        pPed->ForceWeapon_46F600(0);
+    }
+}
+
+// TODO: move
+MATCH_FUNC(0x46E370)
+EXPORT void IanTest_46E370()
+{
+    sub_46DD70(4, 4);
+}
+
+// TODO: move
+MATCH_FUNC(0x5D8DF0)
+EXPORT void InvalidateCachedScreenDimension_5D8DF0()
+{
+    gCachedScreenDimension_706C58 = 0;
+}
+
+MATCH_FUNC(0x4B8EB0)
+void Game_0x40::BootGame_4B8EB0()
+{
+
+    gGameSession_67E8E0.SetBonusRatingTextIdx_4C5AB0(0);
+    if (bStartNetworkGame_7081F0)
+    {
+        ApplyNetworkGameSettings_4B8E50();
+    }
+
+    InvalidateCachedScreenDimension_5D8DF0();
+    ConvertColourBanks_5D7CB0();
+    UpdateGameScreenSize_5D8E00();
+    gSprite_8_703820->sub_5A5870();
+    gTileAnim_2_7052C4->Empty_5BC300();
+    gPublicTransport_181C_6FF1D4->SetupTrainAndBusStops_5794B0();
+    gObject_5C_6F8F84->CreateDiagonalWallObjects_5297F0();
+    PedGroup::ResetAllGroups_4CB080();
+    if (bDo_mike_67D5CC)
+    {
+        gMike_A80_6F7328->Init_4FF1B0();
+    }
+    gCar_214_705F20->Reset_5C8750();
+    gMap_0x370_6F6268->alloc_zones_4DFCA0();
+    gHud_2B00_706620->Init_5D6BE0();
+    gScriptManager_6F8060->Update_512160(); // script
+    gGame_0x40_67E008->field_38_orf1->ApplyCheats_56A490();
+    if (bDo_iain_test_67D4E9)
+    {
+        IanTest_46E370();
+    }
+    gRouteFinder_6FFDC8->Reset_588C60();
+    gHud_2B00_706620->Init_5D6BE0();
+    gMap_0x370_6F6268->SpawnMapObjects_4DFB90(); // map objects
+    gMap_0x370_6F6268->update_lights_4DFCD0(); // lights
+    if (!bSkip_traffic_lights_67D4EC)
+    {
+        gTrafficLights_194_705958->CreateFromMapZones_5C2AC0();
+    }
+    gPublicTransport_181C_6FF1D4->SpawnTrainsFromStations_578860(); // trains?
+
+    for (s32 i = 0; i < field_23_num_players; i++)
+    {
+        field_4_players[i]->InitializePlayerState_569CB0();
+    }
+
+    gPlyDat_6FEAC0->DoMuchCashCheat_56C250();
+}
+
+MATCH_FUNC(0x4B8FF0)
+void Game_0x40::ShowCounters_4B8FF0()
+{
+    swprintf(tmpBuff_67BD9C, L"recycled cars : %d", gCar_6C_677930->field_28_recycled_cars);
+    gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(tmpBuff_67BD9C, 0, 32, gDebugFont_706600, 1);
+
+    swprintf(tmpBuff_67BD9C, L"prot. recycled cars : %d", gCar_6C_677930->field_40_proto_recycled_cars);
+    gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(tmpBuff_67BD9C, 0, 48, gDebugFont_706600, 1);
+
+    swprintf(tmpBuff_67BD9C, L"mission cars : %d", gCar_6C_677930->field_3C_mission_cars);
+    gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(tmpBuff_67BD9C, 0, 64, gDebugFont_706600, 1);
+
+    swprintf(tmpBuff_67BD9C, L"unit cars : %d", gCar_6C_677930->field_34_unit_cars);
+    gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(tmpBuff_67BD9C, 0, 80, gDebugFont_706600, 1);
+
+    swprintf(tmpBuff_67BD9C, L"cars:%d", gCar_BC_Pool_67792C->get_cars_count_45AD30());
+    gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(tmpBuff_67BD9C, 0, 96, gDebugFont_706600, 1);
+
+    swprintf(tmpBuff_67BD9C, L"dummy_chars : %d", (unsigned __int8)gPedManager_6787BC->field_2_num_dummy_chars);
+    gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(tmpBuff_67BD9C, 0, 112, gDebugFont_706600, 1);
+
+    Player* field_38_orf1 = gGame_0x40_67E008->field_38_orf1;
+    if (field_38_orf1)
+    {
+        swprintf(tmpBuff_67BD9C, L"accuracy_count : %d", (unsigned __int8)field_38_orf1->field_2D4_scores.get_accuracy_count_45B0A0());
+        gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(tmpBuff_67BD9C, 0, 128, gDebugFont_706600, 1);
+
+        swprintf(tmpBuff_67BD9C, L"reverse_count : %d", field_38_orf1->field_2D4_scores.get_reverse_count_45B0B0());
+        gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(tmpBuff_67BD9C, 0, 144, gDebugFont_706600, 1);
+
+        // TODO: Seems strange, converted to a local integer point or something ??
+        const u32 x = field_38_orf1->field_2C4_player_ped->get_cam_x().ToInt();
+        const u32 y = field_38_orf1->field_2C4_player_ped->get_cam_y().ToInt();
+
+        gmp_zone_info* pNavZone = gMap_0x370_6F6268->get_nav_zone_unknown_4DF890(x, y);
+
+        swprintf(tmpBuff_67BD9C, L"density:%d", pNavZone->field_0_car_density);
+        gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(tmpBuff_67BD9C, 0, 160, gDebugFont_706600, 1);
+    }
+}
+
+MATCH_FUNC(0x4B9270)
+void Game_0x40::DebugShowCarStatsAndFrameSkip_4B9270()
+{
+    if (gDo_show_counter_67D6E6)
+    {
+        ShowCounters_4B8FF0();
+    }
+
+    if (field_30_bLimitFramerate)
+    {
+        Hud_TextEntry_C4* pC4 = gHud_2B00_706620->field_650_texts.DisplayText_5D1F50(L"FF", 0, 440, gDebugFont_706600, 1);
+        pC4->SetDrawKind8_45AFD0(6);
+    }
+}
+
+MATCH_FUNC(0x4B92D0)
+void Game_0x40::Draw_4B92D0()
+{
+    gViewCamera_676978 = &field_1C_view_player->field_14C_view_camera;
+
+    gpMapRenderer_6F66E4->ClearDrawnTileCount_4F6A10();
+    gSprite_8_703820->ResetDrawnSpriteCount_5A5860();
+    gSpriteRenderer_67B580->ResetAll_4954F0();
+
+    gSpriteGrid_3_679210->DrawSpritesClipped_477A40();
+    gSpriteGrid_2_67920C->DrawSpritesClipped_477A40();
+    gSpriteGrid_1_679208->DrawSpritesClipped_477A40();
+
+    MakeScreenTableAndSetWindow_5D7D30();
+
+    pgbh_BeginScene();
+
+    gpMapRenderer_6F66E4->Draw_4F6A20(); // Note: Also seems to draw sprites
+
+    if (!bExplodingScoresOff_67D4FB)
+    {
+        gExplodingScorePool->DrawExplodingScores_5969E0();
+    }
+
+    gHud_2B00_706620->DrawGui_5D6860(); // user
+
+    if (bDo_mike_67D5CC)
+    {
+        gMike_A80_6F7328->DebugDrawProfiling_4FF250();
+    }
+
+    pgbh_EndScene();
+    FreeSurface_5D7DC0();
+}
+
+MATCH_FUNC(0x4B9380)
+void Game_0x40::UpdateAllPlayersControls_4B9380()
+{
+    Player** ppPlayersIterator = field_4_players;
+    u32 idx = 0;
+    while (idx < field_23_num_players)
+    {
+        if ((*ppPlayersIterator)->field_8E_bInUse)
+        {
+            (*ppPlayersIterator)->ControlInputs_566820();
+        }
+        ++idx;
+        ++ppPlayersIterator;
+    }
+}
+
+//MATCH_FUNC(0x5D9970)
+static void SetGamma_5D9970() // TODO Function chunk of 0x4AEC00, 0x4B93C0 and 0x4B9410 - probably move elsewhere
+{
+    const s32 gamma = gRegistry_6FF968.Get_Screen_Setting_5870D0("gamma", 10u);
+    if (counter_706C4C)
+    {
+        if (SetGamma_5D9910(gamma))
+        {
+            --counter_706C4C;
+        }
+        else
+        {
+            counter_706C4C = 0;
+        }
+    }
+}
+
+MATCH_FUNC(0x4B93C0)
+void Game_0x40::UpdatePaused_4B93C0()
+{
+    Player** pIter = field_4_players;
+    u32 i = 0;
+    while (i < field_23_num_players)
+    {
+        if ((*pIter)->field_8E_bInUse)
+        {
+            (*pIter)->UpdatePaused_569410();
+        }
+        ++i;
+        ++pIter;
+    }
+
+    gHud_2B00_706620->UpdatePauseSection_5D69C0();
+
+    if (counter_706C4C > 0)
+    {
+        SetGamma_5D9970();
+    }
+}
+
+MATCH_FUNC(0x4B9410)
+void Game_0x40::UpdateGame_4B9410()
+{
+    Player** ppPlayerIter = field_4_players;
+    u32 i = 0;
+    while (i < field_23_num_players)
+    {
+        if ((*ppPlayerIter)->field_8E_bInUse)
+        {
+            (*ppPlayerIter)->Service_5687F0();
+        }
+        i++;
+        ppPlayerIter++;
+    }
+
+    gCollisionSoundQueue_66AFE0->Reset_40BB90();
+    gCollisionCounters_6791FC->ResetCount_478A20();
+
+    if (gLighting_626A09)
+    {
+        gLight_1D4CC_6F5520->Service_45C1E0();
+    }
+
+    gCranePool_D9C_679FD4->CranesService_480E50();
+    gCrusherPool_94_67A830->CrushersService_4887F0();
+    gGeneratorPool_14AC_67E5D0->GeneratorsService_4C1D70();
+    gPedManager_6787BC->PedsService_4703F0();
+    gPublicTransport_181C_6FF1D4->PublicTransportService_57A7A0(); // trains & buses
+    gGarage_48_6FD26C->GaragesService_5349D0();
+    gCar_6C_677930->CarsService_446790();
+
+    if (bDo_mike_67D5CC)
+    {
+        gMike_A80_6F7328->sub_4FF980();
+    }
+
+    if (!bSkip_traffic_lights_67D4EC)
+    {
+        gTrafficLights_194_705958->TrafficLightsService_5C2950(); // traffic lights
+    }
+
+    gObject_5C_6F8F84->ObjectsService_5293A0();
+
+    if (!bSkip_mission_67D4E5)
+    {
+        gScriptManager_6F8060->ExecuteScriptThreads_5127A0(); // missions
+    }
+
+    gEmergencyCrewPool_706280->ServiceAll_5CBBD0();
+
+    if (!bSkip_ambulance_67D6C9)
+    {
+        gAmbulance_110_6F70A8->AmbulancesService_4FA790(); // ambulance
+    }
+
+    if (!bSkip_police_67D4F9)
+    {
+        gPolice_7B8_6FEE40->Service_570270();
+    }
+
+    if (!bSkip_particles_67D64D)
+    {
+        gParticle_8_6FD5E8->ParticlesService_53E320();
+    }
+
+    gTileAnim_2_7052C4->UpdateTileAnimations_5BC310();
+
+    if (bDo_show_timing_67D6DC)
+    {
+        gFpsCounter_7055D4->ShowFps_5BEC30();
+    }
+
+    gHud_2B00_706620->UpdateHUD_5D69D0();
+    gpRng_67AB34->AdvanceCycle_48B900(); // rng
+    gDoor_4D4_67BD2C->DoorsService_49D460();
+    gFirefighterPool_54_67D4C0->FireEnginesService_4A85F0(); // fire engines
+
+    if (!bExplodingScoresOff_67D4FB)
+    {
+        gExplodingScorePool->Update_596940();
+    }
+
+    if (bDo_show_junc_ids_67D5B0)
+    {
+        gRouteFinder_6FFDC8->ShowJunctionIds_588620();
+    }
+
+    if (counter_706C4C > 0)
+    {
+        sub_SetGamma();
+    }
+}
+
+MATCH_FUNC(0x4B9640)
+s8 Game_0x40::ExecuteGame_4B9640()
+{
+    UpdateAllPlayersControls_4B9380();
+
+    switch (field_0_game_state)
+    {
+        case GameState::ExecuteFrameAndPause_0:
+            UpdateGame_4B9410();
+
+            if (!bSkip_audio_67D6BE)
+            {
+                gRoot_sound_66B038.Service_40EFA0();
+            }
+            field_0_game_state = GameState::Paused_2;
+            break;
+
+        case GameState::Running_1:
+            UpdateGame_4B9410();
+            if (!bSkip_audio_67D6BE)
+            {
+                gRoot_sound_66B038.Service_40EFA0();
+            }
+            break;
+
+        case GameState::Paused_2:
+            UpdatePaused_4B93C0();
+            if (!bSkip_audio_67D6BE)
+            {
+                gRoot_sound_66B038.Service_40EFA0();
+            }
+            break;
+
+        default:
+            break;
+    }
+    return UpdateExitTimer_4B8C20();
+}
+
+// TODO: Werid function chunk stuff
+MATCH_FUNC(0x4B96B0)
+void Game_0x40::Pause_4B96B0()
+{
+    // Singleplayer or playing alone on multiplayer?
+    if (field_23_num_players == 1)
+    {
+        field_0_game_state = GameState::Paused_2;
+    }
+}
+
+MATCH_FUNC(0x4B96C0)
+void Game_0x40::Unpause_4B96C0()
+{
+    if (field_23_num_players == 1)
+    {
+        field_0_game_state = GameState::Running_1;
+
+        if (gInputDevices_67B990)
+        {
+            gInputDevices_67B990->read_keyboard_and_gamepad_498CC0();
+        }
+
+        Player* pPlayer = this->field_38_orf1;
+        if (pPlayer)
+        {
+            pPlayer->DisableInputs_569F40();
+            field_38_orf1->ClearInputs_56A6D0();
+            gInputRecorder_67F8B0.field_4_input_bits &= ~0xFFFu;
+        }
+    }
+}
+
+MATCH_FUNC(0x4B9700)
+void Game_0x40::TogglePause_4B9700()
+{
+    if (field_0_game_state == GameState::Running_1)
+    {
+        Pause_4B96B0();
+    }
+    else
+    {
+        Unpause_4B96C0();
+    }
+}
+
+MATCH_FUNC(0x4B9710)
+void Game_0x40::SinglePlayerStepFrame_4B9710()
+{
+    if (field_23_num_players == 1)
+    {
+        field_0_game_state = GameState::ExecuteFrameAndPause_0;
+    }
+}
+
+MATCH_FUNC(0x4B9720)
+void Game_0x40::sub_4B9720()
+{
+    if (field_38_orf1)
+    {
+        field_38_orf1->sub_565460();
+    }
+
+    ResetFrameTimer_4DA830();
+
+    if (gHud_2B00_706620)
+    {
+        gHud_2B00_706620->GetTextSpeed_5D6A90();
+    }
+}
+
+MATCH_FUNC(0x4B9750)
+Player* Game_0x40::GetFirstPlayerWithoutPed_4B9750()
+{
+    for (s32 i = 0; i < field_23_num_players; i++)
+    {
+        if (field_4_players[i]->field_8E_bInUse && !field_4_players[i]->has_player_ped_45B0C0())
+        {
+            return field_4_players[i];
+        }
+    }
+    return NULL;
+}
+
+MATCH_FUNC(0x4B9790)
+void Game_0x40::ShakeCamerasAtPos_4B9790(Fix16 a2, Fix16 a3, Fix16 a4)
+{
+    Camera_0xBC* pCam = IteratePlayerCamera_4B9BC0();
+    while (pCam)
+    {
+        if (pCam->check_camera(a3, a4))
+        {
+            pCam->SetShake_436120(a2);
+        }
+        pCam = IterateNextPlayerCamera_4B9C50();
+    }
+}
+
+MATCH_FUNC(0x4B97E0)
+s8 Game_0x40::IsSpriteOnScreenForAnyPlayer_4B97E0(Sprite* pSprite, Fix16 margin)
+{
+    for (u8 i = 0; i < field_23_num_players; i++)
+    {
+        if (IsSpriteOnScreen_4B9950(pSprite, i, margin))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+MATCH_FUNC(0x4B9830)
+s8 Game_0x40::IsSpriteVisibleToAnyPlayer_4B9830(Sprite* pCarSprite, Fix16 margin)
+{
+    for (u8 i = 0; i < field_23_num_players; i++)
+    {
+        if (IsSpriteOnScreen_4B9950(pCarSprite, i, margin) || IsSpriteCameraSubjectForPlayer_4B9A10(pCarSprite, i))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+MATCH_FUNC(0x4B9890)
+s8 Game_0x40::IsSpriteInAnyPlayerView_4B9890(Sprite* a2, s32 a3)
+{
+    for (u8 i = 0; i < field_23_num_players; i++)
+    {
+        if (IsSpriteInPlayerView_4B98E0(a2, i, a3))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+MATCH_FUNC(0x4B98E0)
+bool Game_0x40::IsSpriteInPlayerView_4B98E0(Sprite* a2, u8 playerIdx, s32 a4)
+{
+    if (field_4_players[playerIdx]->field_8E_bInUse)
+    {
+        if (field_4_players[playerIdx]->field_90_game_camera.IsSpriteInView_435630(a2, a4))
+        {
+            return true;
+        }
+        return field_4_players[playerIdx]->field_2D0_bAuxCamActive && field_4_players[playerIdx]->field_208_aux_game_camera.IsSpriteInView_435630(a2, a4) ? true :
+                                                                                                                                   false;
+    }
+    return false;
+}
+
+MATCH_FUNC(0x4B9950)
+s8 Game_0x40::IsSpriteOnScreen_4B9950(Sprite* pCarSprite, u8 playerIdx, Fix16 margin)
+{
+    Player*& pPlayer = this->field_4_players[playerIdx]; // a reference: 9.6f keeps the slot address too
+    if (!pPlayer->field_8E_bInUse)
+    {
+        return 0;
+    }
+
+    if (pPlayer->field_90_game_camera.IsSpriteInBounds_45AEA0(pCarSprite, margin))
+    {
+        return 1;
+    }
+
+    if (pPlayer->field_2D0_bAuxCamActive && pPlayer->field_208_aux_game_camera.IsSpriteInBounds_45AEA0(pCarSprite, margin))
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+MATCH_FUNC(0x4B9A10)
+bool Game_0x40::IsSpriteCameraSubjectForPlayer_4B9A10(Sprite* pSprite, u8 playerIdx)
+{
+    if (field_4_players[playerIdx]->field_8E_bInUse)
+    {
+        if (field_4_players[playerIdx]->field_90_game_camera.IsSpriteTheCameraSubject_4355D0(pSprite))
+        {
+            return true;
+        }
+        return field_4_players[playerIdx]->field_2D0_bAuxCamActive && field_4_players[playerIdx]->field_208_aux_game_camera.IsSpriteTheCameraSubject_4355D0(pSprite) ? true : false;
+    }
+    return false;
+}
+
+// https://decomp.me/scratch/PO0RU wip - prob needs Fix16 operators ??
+MATCH_FUNC(0x4B9A80)
+bool Game_0x40::is_point_on_screen_4B9A80(Fix16 a2_fp, Fix16 a3_fp)
+{
+    s32 i;
+    Player** ppPlayer = field_4_players;
+    for (i = 0; i < field_23_num_players; i++, ppPlayer++)
+    {
+        Player* pPlayer = *ppPlayer;
+        if (pPlayer->field_8E_bInUse)
+        {
+            if (pPlayer->field_90_game_camera.check_camera(a2_fp, a3_fp))
+            {
+                return true;
+            }
+            if (pPlayer->field_2D0_bAuxCamActive && pPlayer->field_208_aux_game_camera.check_camera(a2_fp, a3_fp))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+MATCH_FUNC(0x4B9B10)
+s8 Game_0x40::IsRectVisibleToAnyPlayer_4B9B10(Fix16_Rect* pBounds)
+{
+    s32 i;
+    Player** ppPlayer = field_4_players;
+    for (i = 0; i < field_23_num_players; i++, ppPlayer++)
+    {
+        Player* pCurPlayer = *ppPlayer;
+        if (pCurPlayer->field_8E_bInUse)
+        {
+            if (pCurPlayer->field_90_game_camera.IsRectInBounds_45AF40(pBounds))
+            {
+                return 1;
+            }
+            if (pCurPlayer->field_2D0_bAuxCamActive && pCurPlayer->field_208_aux_game_camera.IsRectInBounds_45AF40(pBounds))
+            {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+MATCH_FUNC(0x4B9BC0)
+Camera_0xBC* Game_0x40::IteratePlayerCamera_4B9BC0()
+{
+    for (field_21_player_camera_idx = 0; field_21_player_camera_idx < field_23_num_players; field_21_player_camera_idx++)
+    {
+        if (field_4_players[field_21_player_camera_idx]->field_8E_bInUse)
+        {
+            field_22_bAuxCamIterated = 0;
+            return &field_4_players[field_21_player_camera_idx]->field_90_game_camera;
+        }
+    }
+    return NULL;
+}
+
+MATCH_FUNC(0x4B9C10)
+s8 Game_0x40::IsCarInAnyPlayerHistory_4B9C10(Car_BC* pCar)
+{
+    Player* pPlayer = IterateFirstPlayer_4B9CD0();
+    while (pPlayer)
+    {
+        if (pPlayer->PromoteCarInHistory_564610(pCar, true))
+        {
+            return 1;
+        }
+        pPlayer = IterateNextPlayer_4B9D10();
+    }
+    return 0;
+}
+
+MATCH_FUNC(0x4B9C50)
+Camera_0xBC* Game_0x40::IterateNextPlayerCamera_4B9C50()
+{
+    if (!field_4_players[field_21_player_camera_idx]->field_2D0_bAuxCamActive || field_22_bAuxCamIterated)
+    {
+        while (++field_21_player_camera_idx < field_23_num_players)
+        {
+            if (field_4_players[field_21_player_camera_idx]->field_8E_bInUse)
+            {
+                field_22_bAuxCamIterated = 0;
+                return &field_4_players[field_21_player_camera_idx]->field_90_game_camera;
+            }
+        }
+        return 0;
+    }
+    else
+    {
+        field_22_bAuxCamIterated = 1;
+        return &field_4_players[field_21_player_camera_idx]->field_208_aux_game_camera;
+    }
+}
+
+MATCH_FUNC(0x4B9CD0)
+Player* Game_0x40::IterateFirstPlayer_4B9CD0()
+{
+    for (field_20_idx = 0; field_20_idx < field_23_num_players; field_20_idx++)
+    {
+        if (field_4_players[field_20_idx]->field_8E_bInUse)
+        {
+            return field_4_players[field_20_idx];
+        }
+    }
+    return 0;
+}
+
+MATCH_FUNC(0x4B9D10)
+Player* Game_0x40::IterateNextPlayer_4B9D10()
+{
+    while (++field_20_idx < field_23_num_players)
+    {
+        if (field_4_players[field_20_idx]->field_8E_bInUse)
+        {
+            return field_4_players[field_20_idx];
+        }
+    }
+    return 0;
+}
+
+MATCH_FUNC(0x4B9D60)
+void Game_0x40::ReduceTrafficSpawnCounterOfOtherViewers_4B9D60(Sprite* a2, Player* pExclude)
+{
+    for (u8 i = 0; i < GTA2_COUNTOF(field_4_players); i++)
+    {
+        Player* p = gGame_0x40_67E008->get_player_4219E0(i);
+        if (p && p != pExclude)
+        {
+            if (gGame_0x40_67E008->IsSpriteOnScreen_4B9950(a2, i, dword_67DFB4))
+            {
+                if (p->field_680_traffic_spawn_counter > p->field_682_traffic_spawn_threshold)
+                {
+                    p->field_680_traffic_spawn_counter -= p->field_682_traffic_spawn_threshold;
+                }
+                else
+                {
+                    p->field_680_traffic_spawn_counter = 0;
+                }
+            }
+        }
+    }
+}
+
+#ifdef N64
+// O script original (que dispara SetAmbientLevel) nao roda no N64: comeca com luz do dia (1.0).
+DEFINE_GLOBAL_INIT(Fix16, kInitialAmbient_67DCCC, Fix16(0x4000, 0), 0x67DCCC);
+#else
+DEFINE_GLOBAL_INIT(Fix16, kInitialAmbient_67DCCC, Fix16(0x666, 0), 0x67DCCC);
+#endif
+
+MATCH_FUNC(0x4B9DE0)
+Game_0x40::Game_0x40(u8 max_players, s8 player_idx) // 4B9DE0
+{
+    gRng_6F6784.srand_4F7A40(); // srand?
+
+    field_3C_bSkipPolice = bSkip_police_67D4F9;
+
+    for (s32 ii = 0; ii < GTA2_COUNTOF(field_4_players); ii++)
+    {
+        field_4_players[ii] = 0;
+    }
+
+    field_23_num_players = max_players;
+    field_24_cur_idx = player_idx;
+    for (u32 i = 0; i < field_23_num_players; i++)
+    {
+        field_4_players[i] = new Player(i); // ctor call
+        if (!field_4_players[i])
+        {
+            FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1784);
+        }
+    }
+    Player* pPlayer = field_4_players[field_24_cur_idx];
+    field_38_orf1 = pPlayer;
+    pPlayer->field_0_bIsUser = 1;
+    field_1C_view_player = field_38_orf1;
+
+    gpRng_67AB34 = new rng(); // inline
+    if (!gpRng_67AB34)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1793);
+    }
+
+    gText_0x14_704DFC = new text_0x14(); // ctor call
+    if (!gText_0x14_704DFC)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1795);
+    }
+
+    gGtx_0x106C_703DD4 = new gtx_0x106C(); // ctor call
+    if (!gGtx_0x106C_703DD4)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1803);
+    }
+
+    gMap_0x370_6F6268 = new Map_0x370(); // ctor call
+    if (!gMap_0x370_6F6268)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1806);
+    }
+
+    gpMapRenderer_6F66E4 = new MapRenderer(); // inlined ok?
+    if (!gpMapRenderer_6F66E4)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1808);
+    }
+
+    gSpriteRenderer_67B580 = new SpriteRenderer_1C(); // ctor call
+    if (!gSpriteRenderer_67B580)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1810);
+    }
+
+    gMike_A80_6F7328 = new Mike_A80(); // inlined
+    if (!gMike_A80_6F7328)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1824);
+    }
+
+    gCar_6C_677930 = new Car_6C(); // ctor call
+    if (!gCar_6C_677930)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1827);
+    }
+
+    gCar_214_705F20 = new Car_214(); // no ctor
+    if (!gCar_214_705F20)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1829);
+    }
+
+    gScriptManager_6F8060 = new ScriptManager_C1EA8(); // ctor call
+    if (!gScriptManager_6F8060)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1831);
+    }
+
+    gScriptStackFramePool_6F8068 = new ScriptStackFramePool_25C(); // multi level inlines
+    if (!gScriptStackFramePool_6F8068)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1833);
+    }
+
+    gFpsCounter_7055D4 = new FpsCounter_54(); // ctor call
+    if (!gFpsCounter_7055D4)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1836);
+    }
+
+    gSprite_8_703820 = new Sprite_8(); // ctor call
+    if (!gSprite_8_703820)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1839);
+    }
+
+    gPedManager_6787BC = new PedManager(); // ctor call
+    if (!gPedManager_6787BC)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1841);
+    }
+
+    gCollisionCounters_6791FC = new CollisionCounters_C(); // ctor call
+    if (!gCollisionCounters_6791FC)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1843);
+    }
+
+    gObjectDefinitions_6FCF00 = new ObjectDefinitions_8CA8(); // ctor call
+    if (!gObjectDefinitions_6FCF00)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1845);
+    }
+
+    gObject_5C_6F8F84 = new Object_5C(); // ctor call
+    if (!gObject_5C_6F8F84)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1847);
+    }
+
+    gPedRefTable_7F8_703398 = new PedRefTable_7F8(); // ctor call
+    if (!gPedRefTable_7F8_703398)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1849);
+    }
+
+    gTileAnim_2_7052C4 = new TileAnim_2(); // ctor call
+    if (!gTileAnim_2_7052C4)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1851);
+    }
+
+    gWeapon_8_707018 = new Weapon_8(); // ctor call
+    if (!gWeapon_8_707018)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1853);
+    }
+
+    gDoor_4D4_67BD2C = new Door_4D4(); // ctor call ok
+    if (!gDoor_4D4_67BD2C)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1855);
+    }
+
+    gAmbulance_110_6F70A8 = new Ambulance_110(); // multi level inline
+    if (!gAmbulance_110_6F70A8)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1857);
+    }
+
+    gPublicTransport_181C_6FF1D4 = new PublicTransport_181C(); // ctor call
+    if (!gPublicTransport_181C_6FF1D4)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1860);
+    }
+
+    gTaxi_4_704130 = new Taxi_4(); // ctor call
+    if (!gTaxi_4_704130)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1863);
+    }
+
+    gHud_2B00_706620 = new Hud_2B00(); // ctor call
+    if (!gHud_2B00_706620)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1865);
+    }
+
+    gTextureCache_15D8_705064 = new TextureCache_15D8(); // ctor call
+    if (!gTextureCache_15D8_705064)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1867);
+    }
+
+    gTrafficLights_194_705958 = new TrafficLights_194(); // ctor call
+    if (!gTrafficLights_194_705958)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1869);
+    }
+
+    gRouteFinder_6FFDC8 = new RouteFinder(); // ctor call
+    if (!gRouteFinder_6FFDC8)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1871);
+    }
+
+    gPatrolRoutePool_6FD784 = new PatrolRoutePool_1D7E(); // ctor call
+    if (!gPatrolRoutePool_6FD784)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1873);
+    }
+
+    gPathFinder_6FDEF0 = new PathFinder_2FD4(); // inline
+    if (!gPathFinder_6FDEF0)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1875);
+    }
+
+    gCarInfo_808_678098 = new CarInfo_808(); // ctor call
+    if (!gCarInfo_808_678098)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1877);
+    }
+
+    gParticle_8_6FD5E8 = new Particle_8(); // ctor call
+    if (!gParticle_8_6FD5E8)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1879);
+    }
+
+    gExplosionPool_3D4_6FD5EC = new ExplosionPool_3D4(); // ctor call
+    if (!gExplosionPool_3D4_6FD5EC)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1881);
+    }
+
+    gExplosionPool_7A8_6FD5F0 = new ExplosionPool_7A8(); // ctor call
+    if (!gExplosionPool_7A8_6FD5F0)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1883);
+    }
+
+    gCranePool_D9C_679FD4 = new CranePool_D9C(); // ctor call
+    if (!gCranePool_D9C_679FD4)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1885);
+    }
+
+    gCrusherPool_94_67A830 = new CrusherPool_94(); // ctor call
+    if (!gCrusherPool_94_67A830)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1887);
+    }
+
+    gGeneratorPool_14AC_67E5D0 = new GeneratorPool_14AC(); // ctor call
+    if (!gGeneratorPool_14AC_67E5D0)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1889);
+    }
+
+    gEmergencyCrewPool_706280 = new EmergencyCrewPool_1E0(); // multi level inline
+    if (!gEmergencyCrewPool_706280)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1891);
+    }
+
+    gPolice_7B8_6FEE40 = new Police_7B8(); // multi level inline
+    if (!gPolice_7B8_6FEE40)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1893);
+    }
+
+    gLight_1D4CC_6F5520 = new Light_1D4CC(); // multi level inline
+    if (!gLight_1D4CC_6F5520)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1896);
+    }
+
+    gGangPool_CA8_67E274 = new GangPool_CA8(); // multi level inline
+    if (!gGangPool_CA8_67E274)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1899);
+    }
+
+    gGarage_48_6FD26C = new Garage_48(); // ctor call
+    if (!gGarage_48_6FD26C)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1901);
+    }
+
+    gCarChaseTaskTable_678E30 = new CarChaseTaskTable_500(); // ctor call
+    if (!gCarChaseTaskTable_678E30)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1903);
+    }
+
+    if (!bExplodingScoresOff_67D4FB)
+    {
+        gExplodingScorePool = new ExplodingScorePool(); // ctor call
+        if (!gExplodingScorePool)
+        {
+            FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1909);
+        }
+    }
+
+    gCrimeReportQueue_67A4B8 = new CrimeReportQueue_CC_Sub(); // ctor call
+    if (!gCrimeReportQueue_67A4B8)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1913);
+    }
+
+    gFirefighterPool_54_67D4C0 = new FirefighterPool_54(); // multi level inline 4A88D0 func only
+    if (!gFirefighterPool_54_67D4C0)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1915);
+    }
+
+    gCollisionSoundQueue_66AFE0 = new CollisionSoundQueue_C88(); // ctor call
+    if (!gCollisionSoundQueue_66AFE0)
+    {
+        FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1918);
+    }
+
+    if (gText_0x14_704DFC->field_10_lang_code == 'j')
+    {
+        gKanjiFont_6F5168 = new KanjiFont_8EC(); // ctor call
+        if (!gKanjiFont_6F5168)
+        {
+            FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\game.cpp", 1923);
+        }
+    }
+
+    field_21_player_camera_idx = 0;
+    field_22_bAuxCamIterated = 0;
+    field_0_game_state = GameState::Running_1;
+    gbRngRemapTableDone_679C0A = 0;
+    field_20_idx = 0;
+    field_28_timer = -1;
+    field_30_bLimitFramerate = 0;
+    field_2C_game_exit_type = GameExitType::None;
+    field_34_network_frame_ms = 0;
+    if (!bSkip_audio_67D6BE)
+    {
+        gRoot_sound_66B038.InitMusicAndCopRadio_40F010();
+    }
+}
+
+MATCH_FUNC(0x4BAE30)
+Game_0x40::~Game_0x40()
+{
+    bSkip_police_67D4F9 = field_3C_bSkipPolice;
+
+    if (!bSkip_audio_67D6BE)
+    {
+        gRoot_sound_66B038.DeInitVocals_40F020();
+    }
+
+    for (u32 i = 0; i < field_23_num_players; i++)
+    {
+        GTA2_DELETE_AND_NULL(field_4_players[i]);
+    }
+
+    GTA2_DELETE_AND_NULL(gpRng_67AB34);
+    GTA2_DELETE_AND_NULL(gText_0x14_704DFC);
+    GTA2_DELETE_AND_NULL(gGtx_0x106C_703DD4);
+    GTA2_DELETE_AND_NULL(gMap_0x370_6F6268);
+    GTA2_DELETE_AND_NULL(gpMapRenderer_6F66E4);
+    GTA2_DELETE_AND_NULL(gSpriteRenderer_67B580);
+    GTA2_DELETE_AND_NULL(gPedPool_6787B8);
+
+    GTA2_DELETE_AND_NULL(gCar_6C_677930);
+    GTA2_DELETE_AND_NULL(gCar_214_705F20);
+    GTA2_DELETE_AND_NULL(gScriptManager_6F8060);
+    GTA2_DELETE_AND_NULL(gScriptStackFramePool_6F8068);
+
+    GTA2_DELETE_AND_NULL(gObjectDefinitions_6FCF00);
+    GTA2_DELETE_AND_NULL(gObject_5C_6F8F84);
+
+    GTA2_DELETE_AND_NULL(gPedManager_6787BC);
+    GTA2_DELETE_AND_NULL(gMike_A80_6F7328);
+
+    GTA2_DELETE_AND_NULL(gFpsCounter_7055D4);
+
+    GTA2_DELETE_AND_NULL(gSprite_8_703820);
+    GTA2_DELETE_AND_NULL(gCollisionCounters_6791FC);
+    GTA2_DELETE_AND_NULL(gPedRefTable_7F8_703398);
+    GTA2_DELETE_AND_NULL(gPublicTransport_181C_6FF1D4);
+    GTA2_DELETE_AND_NULL(gTaxi_4_704130);
+    GTA2_DELETE_AND_NULL(gTileAnim_2_7052C4);
+    GTA2_DELETE_AND_NULL(gWeapon_8_707018);
+    GTA2_DELETE_AND_NULL(gDoor_4D4_67BD2C);
+    GTA2_DELETE_AND_NULL(gAmbulance_110_6F70A8);
+    GTA2_DELETE_AND_NULL(gHud_2B00_706620);
+    GTA2_DELETE_AND_NULL(gTextureCache_15D8_705064);
+
+    GTA2_DELETE_AND_NULL(gTrafficLights_194_705958);
+    GTA2_DELETE_AND_NULL(gRouteFinder_6FFDC8);
+
+    GTA2_DELETE_AND_NULL(gPatrolRoutePool_6FD784);
+
+    GTA2_DELETE_AND_NULL(gPathFinder_6FDEF0);
+
+    GTA2_DELETE_AND_NULL(gCarInfo_808_678098);
+
+    GTA2_DELETE_AND_NULL(gParticle_8_6FD5E8);
+    GTA2_DELETE_AND_NULL(gExplosionPool_3D4_6FD5EC);
+    GTA2_DELETE_AND_NULL(gExplosionPool_7A8_6FD5F0);
+    GTA2_DELETE_AND_NULL(gCranePool_D9C_679FD4);
+    GTA2_DELETE_AND_NULL(gCrusherPool_94_67A830);
+    GTA2_DELETE_AND_NULL(gGeneratorPool_14AC_67E5D0);
+
+    GTA2_DELETE_AND_NULL(gEmergencyCrewPool_706280);
+    GTA2_DELETE_AND_NULL(gPolice_7B8_6FEE40);
+    GTA2_DELETE_AND_NULL(gLight_1D4CC_6F5520);
+    GTA2_DELETE_AND_NULL(gGangPool_CA8_67E274);
+    GTA2_DELETE_AND_NULL(gGarage_48_6FD26C);
+    GTA2_DELETE_AND_NULL(gCarChaseTaskTable_678E30);
+
+    if (!bExplodingScoresOff_67D4FB)
+    {
+        GTA2_DELETE_AND_NULL(gExplodingScorePool);
+    }
+
+    GTA2_DELETE_AND_NULL(gCrimeReportQueue_67A4B8);
+    GTA2_DELETE_AND_NULL(gFirefighterPool_54_67D4C0);
+    GTA2_DELETE_AND_NULL(gCollisionSoundQueue_66AFE0);
+
+    if (gKanjiFont_6F5168)
+    {
+        GTA2_DELETE_AND_NULL(gKanjiFont_6F5168);
+    }
+
+    field_1C_view_player = 0;
+    field_38_orf1 = 0;
+}

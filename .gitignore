@@ -1,0 +1,10 @@
+﻿*.bak*
+build/
+build_recomp/
+build_probe/
+filesystem/
+filesystem_recomp/
+deps/
+capturas/
+*.log
+gta2_data/
