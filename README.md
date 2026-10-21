@@ -1,122 +1,102 @@
-# GTA 2 - Nintendo 64 Tech Demo
+# GTA 2 for Nintendo 64
 
-Tech demo funcional de **Grand Theft Auto 2** para o **Nintendo 64** com suporte a **Expansion Pak (8 MB)** em resolução **320×240**, desenvolvida com **Libdragon** e **Tiny3D**.
+An early playable native Nintendo 64 port of **Grand Theft Auto 2**, built from the reverse-engineered PC engine.
 
-O projeto utiliza conceitos, dados de blocos e tipos de ponto fixo derivados da engenharia reversa do código-fonte de PC ([`gta2_re`](https://github.com/CriminalRETeam/gta2_re) e [`gta2-browser`](https://github.com/M1sterMo/gta2-browser)), adaptados para o pipeline 3D acelerado por hardware no RSP (Reality Signal Processor) do N64.
+The game is already playable, including in-car radio playback. This repository records the current work in progress and provides the source for further development. Performance optimization and additional gameplay systems are the next priorities.
 
----
+> **Current status:** one district is available. Missions and gang systems are not enabled yet. This is an experimental build, with incomplete features and remaining bugs.
 
-## 📦 Identificação do Executável da ROM
+## What works
 
-| Campo | Valor |
-|---|---|
-| **Caminho Absoluto** | `C:\Desenvolvimento\Nintendo 64\GTA264\GTA2 N64 Tech Demo\gta2_n64_demo.z64`<br>*(espelhado em `C:\Desenvolvimento\Nintendo 64\GTA2 N64 Tech Demo\gta2_n64_demo.z64`)* |
-| **Tamanho** | **737.280 bytes** (720 KB) |
-| **Data / Hora de Compilação** | `20/10/2026 14:24:31` (atualizada com correções e logs de colisão) |
-| **Hash SHA-256** | `86A34BE468BFFEA0131048612126D16BB27D3897C9545C7005A58CAB026B2AC7` |
-| **Caminho no Emulador** | `..\Veil of the Damned 64\deps\ares\ares-v148\ares.exe` |
+- Playable exploration of one district.
+- On-foot movement and vehicle driving.
+- In-car radio playback and station switching.
+- Nintendo 64 controller input.
+- A native renderer using libdragon's RDPQ API.
+- A build pipeline that converts PC game data for the N64.
 
----
+## How the port works
 
-## 🎯 Distinção de Escopo: Implementado, Testado e Provisório
+The port compiles the recovered GTA 2 PC engine for the N64 and supplies a platform layer for graphics, input, timing, files, and audio.
 
-### 1. Funcionalidades Implementadas
-* **Cenário 3D**: Recorte urbano de Downtown (20×20 blocos) com asfalto, calçadas, faixas de pedestre, sinalização e edifícios com parapeitos.
-* **Veículo 3D**: Carro esportivo estilo GTA 2 estacionado na avenida principal.
-* **Personagem**: Sprite 2D de Claude Speed com rotação e projeção de sombra elíptica.
-* **Física e Colisão**:
-  - Pedestre: Caminhada analógica/D-Pad, corrida com botão A, detecção de colisão com resposta deslizante (*sliding collision*) contra paredes.
-  - Veículo: Aceleração progressiva com A, frenagem e ré com B, arrasto natural, esterçamento proporcional à velocidade e colisão com ricochete elástico contra prédios.
-* **Câmera**: Modo de acompanhamento GTA 2 (ângulo superior característico) e modo livre de inspeção (pan analógico, zoom e inclinação).
-* **Embarque / Desembarque**: Detecção de proximidade com prompt contextual no HUD, embarque e desembarque ao lado da porta do motorista com tecla Z / D-Pad Up.
-* **Telemetria e HUD**: FPS real in-game, tempo bruto de quadro em milissegundos, total de RAM, código/dados estáticos, heap alocado e heap livre medidos pelo sistema.
+The engine's draw commands are rendered through the N64's RDP. Textures are converted and cached for the console's memory and texture limits. Radio tracks are converted to compressed audio and streamed through libdragon's mixer.
 
-### 2. Funcionalidades Efetivamente Testadas no Ares
-* **Inicialização e Carga**: Boot completo sem falhas de assertion (`t3d_light_set_directional` corrigido para ser chamado após `t3d_viewport_attach`).
-* **Carregamento DragonFS**: Leitura bem-sucedida do grid de colisão (`downtown_col.bin`), modelos 3D (`downtown_slice.t3dm`, `car.t3dm`) e sprites (`player.sprite`, `shadow.sprite`).
-* **Jogabilidade Pedestre**: Caminhada, corrida e colisão deslizante testadas e validadas.
-* **Condução Veicular**: Embarque, aceleração, frenagem, marcha a ré, curvas dinâmicas, ricochete contra edifícios e desembarque testados e validados.
-* **Câmera Livre**: Alternância com botão R e inspeção livre de blocos testadas.
-* **Estabilidade e Memória**: Execução contínua por mais de 30 segundos com registro em console ISViewer, comprovando estabilidade e ausência de vazamento de memória (heap estável em 1.229 KB).
+The implementation builds on [CriminalRETeam's gta2_re](https://github.com/CriminalRETeam/gta2_re) and work from [M1sterMo's gta2-browser](https://github.com/M1sterMo/gta2-browser). The project name uses “Recomp”; the current approach is a source port of the recovered PC engine, with an N64-specific platform layer.
 
-### 3. Cenário e Assets Provisórios
-* O cenário (20×20 blocos) e o modelo do carro foram gerados proceduralmente pela ferramenta [build_assets.py](file:///c:/Desenvolvimento/Nintendo%2064/GTA2%20N64%20Tech%20Demo/tools/build_assets.py). São **assets provisórios** com visual e proporções representativas para viabilizar a tech demo sem depender de arquivos comerciais protegidos por direitos autorais.
+## Current limitations and roadmap
 
-### 4. Componentes Comprovadamente Derivados de GTA 2
-* **Aritmética de Ponto Fixo `Fix16`** (18.14, onde `1.0 = 16384`) e **Sistema Angular `Ang16`** (1440 unidades = 360°, 4 unidades/grau), preservando os tipos numéricos originais do motor DMA Design.
-* *Nota Técnica*: O uso isolado desses formatos numéricos garante consistência matemática, mas **não comprova por si só a fidelidade ou o aproveitamento integral da física original** do jogo, que engloba sistemas complexos de tração, arrasto, atrito de pneus, curvas de torque, deformação e máquinas de estado de pedestres.
-* Estrutura de grid de blocos (alturas e tipos) e perspectiva de câmera superior inclinada.
+- **Performance:** playable, but frame rate and frame pacing still need improvement. There is no fixed frame-rate guarantee.
+- **World coverage:** only one district is currently included.
+- **Missions:** not enabled yet.
+- **Gangs:** not enabled yet.
+- **Compatibility and stability:** broader testing and bug fixes are ongoing.
+- **Rendering and memory:** further optimization of texture handling, draw submission, and memory use is planned.
 
----
+Please report problems with the build or commit you tested, your emulator or hardware configuration, and steps to reproduce the issue.
 
-## 📊 Medições Reais de Desempenho e Memória
+## Controls
 
-Todas as métricas foram extraídas de medições diretas no hardware virtual (`ares-v148` com Vulkan / paraLLEl-RDP):
+The current input mapping is defined in [`port/n64/main_n64.c`](port/n64/main_n64.c).
 
-| Métrica | Valor Medido | Descrição |
-|---|---|---|
-| **FPS Real In-Game** | **35.1 – 36.4 FPS** | Medido pelo loop de renderização do aplicativo |
-| **Tempo de Quadro Real Bruto** | **26.59 – 28.99 ms** | Tempo total de processamento por frame (sem clamp) |
-| **Apresentação do Emulador** | **59 – 60 VPS** | Taxa de atualização de vídeo NTSC do console |
-| **RAM Total Detectada** | **8.192 KB** (8 MB) | Expansion Pak detectado via `get_memory_size()` |
-| **Código Executável (.text)** | **244 KB** (`249.784 bytes`) | Linker map: `__text_start` até `__text_end` |
-| **Dados Estáticos (.data + .rodata)** | **77 KB** (`79.276 bytes`) | Linker map: `__data_start` até `__data_end` |
-| **BSS (Variáveis Globais)** | **10 KB** (`9.896 bytes`) | Linker map: `__bss_start` até `__bss_end` |
-| **Total Binário Estático** | **331 KB** (`338.948 bytes`) | Ocupação total do binário na memória antes do heap |
-| **Heap Total Alocado** | **1.229 KB** | Medido via `sys_get_heap_stats(&hstats)` -> `hstats.used` |
-| **Heap Total Disponível** | **7.796 KB** | Medido via `sys_get_heap_stats(&hstats)` -> `hstats.total` |
-| **Margem Real de Heap Livre** | **6.567 KB** | Medido via `sys_get_heap_stats(&hstats)` -> `hstats.free` |
-| **Tamanho da ROM (.z64)** | **720 KB** (`737.280 bytes`) | Binário final com assets DragonFS embutidos |
+| N64 control | Action |
+| --- | --- |
+| D-Pad / Control Stick | Move or steer; navigate menus |
+| A | Enter / exit a vehicle; confirm in menus |
+| B | Attack |
+| Z | Jump / handbrake |
+| Start | Escape / menu |
+| C-Left / C-Right | Previous / next weapon |
+| C-Down | Change radio station |
+| L | Toggle texture filtering (render diagnostic) |
+| R | Toggle perspective correction (render diagnostic) |
+| C-Up | Cycle render debug modes |
 
----
+The steering and acceleration behavior follows the engine's directional input mapping. The L, R, and C-Up toggles are development tools and can change the appearance of the scene.
 
-## 🎮 Controles no Nintendo 64
+## Running
 
-| Ação | Controle / Tecla no Ares |
-|---|---|
-| **Mover / Dirigir** | Alavanca Analógica ou D-Pad / Setas do Teclado |
-| **Correr (A pé)** | Botão **A** / Barra de Espaço |
-| **Acelerar (No carro)** | Botão **A** / Barra de Espaço |
-| **Frear / Marcha a Ré (No carro)** | Botão **B** / Tecla **Z** |
-| **Entrar / Sair do Carro** | Gatilho **Z** ou **D-Pad Up** / Tecla **X** ou Seta Cima |
-| **Alternar Câmera (Seguir / Livre)** | Botão **R** / Tecla **R** |
-| **Zoom e Altura da Câmera** | Botões **C-Up** / **C-Down** / Teclas **I** / **K** |
-| **Inclinação da Câmera** | Botões **C-Left** / **C-Right** / Teclas **J** / **L** |
+The current ROM snapshot is located at [`rom/gta2_recomp.z64`](rom/gta2_recomp.z64). Use an N64 emulator with accurate homebrew support, such as [ares](https://ares-emu.net/), with **8 MB of RAM / Expansion Pak enabled**.
 
----
+The development target is an N64 with Expansion Pak. Compatibility on a particular flash cartridge or real console should be confirmed by testing; this README does not claim hardware validation.
 
-## 🛠️ Instruções Reproduzíveis de Compilação
+## Building from source
 
-O projeto é compilado usando a toolchain GCC 16.2.0 do Libdragon instalada no WSL. O diretório no WSL é um symlink para a pasta do workspace:
+The N64 build uses the **libdragon toolchain**, GNU Make, Python 3, and Bash. On Windows, use WSL. The checked-in convenience scripts contain paths from the development machine; for another setup, invoke the Makefile directly from the repository root.
+
+1. Install a compatible [libdragon toolchain and SDK](https://libdragon.dev/). This build also uses `audioconv64` with ULC audio compression support.
+2. Supply the PC game data from your own GTA 2 installation. `GAME_DATA` must point to its `data` directory.
+3. From Bash or WSL, run:
 
 ```bash
-# No terminal WSL / Bash:
-cd /home/georges/gta2_n64
-make clean
-make
+export N64_INST=/opt/libdragon
+export PATH="$N64_INST/bin:$PATH"
+
+make -f Makefile.recomp \
+  GAME_DATA="/absolute/path/to/GTA2/data" \
+  -j4 all
 ```
 
-Ou execute o script automatizado:
-```bash
-wsl bash -lc "cd /home/georges/gta2_n64 && bash ./build.sh"
-```
+Adjust `N64_INST` to your toolchain installation. The build stages the selected data files into DragonFS and converts supported data to the byte order and audio formats used by the port. The required entries are listed in [`Makefile.recomp`](Makefile.recomp).
 
-A compilação produz:
-- `build/gta2_n64_demo.elf`: Executável MIPS ELF com símbolos e mapa.
-- `build/gta2_n64_demo.dfs`: Sistema de arquivos DragonFS contendo malhas, colisão e sprites.
-- `gta2_n64_demo.z64`: Imagem ROM final pronta para emuladores e flashcarts.
+The generated ROM is `gta2_recomp.z64` in the repository root. The committed snapshot under `rom/` is separate and is not automatically replaced by a build.
 
----
+## Repository layout
 
-## 🕹️ Instruções Reproduzíveis de Execução
+| Path | Contents |
+| --- | --- |
+| `port/gta2_re/` | Recovered PC engine and port modifications |
+| `port/n64/` | N64 entry point, graphics, audio, input, and platform support |
+| `port/compat/` and `port/compat_ci/` | Compatibility headers |
+| `tools/` | Data conversion and staging utilities |
+| `Makefile.recomp` | Engine and N64 ROM build |
+| `rom/` | Current committed ROM snapshot |
 
-Execute no emulador de referência **ares-v148**:
+## Credits
 
-```powershell
-& "..\Veil of the Damned 64\deps\ares\ares-v148\ares.exe" "C:\Desenvolvimento\Nintendo 64\GTA264\GTA2 N64 Tech Demo\gta2_n64_demo.z64"
-```
+- **DMA Design / Rockstar Games** — the original Grand Theft Auto 2.
+- **[CriminalRETeam and gta2_re contributors](https://github.com/CriminalRETeam/gta2_re)** — reverse engineering and recovery of the PC engine.
+- **[M1sterMo and gta2-browser contributors](https://github.com/M1sterMo/gta2-browser)** — browser port work and portability adaptations used as a foundation.
+- **[libdragon contributors](https://libdragon.dev/)** — the N64 SDK, toolchain, graphics, and audio libraries.
+- **[Sunshinin11](https://github.com/Sunshinin11)** — N64 port development and integration.
 
-Para visualizar a saída de telemetria em tempo real no console:
-```powershell
-& "..\Veil of the Damned 64\deps\ares\ares-v148\ares.exe" --terminal "C:\Desenvolvimento\Nintendo 64\GTA264\GTA2 N64 Tech Demo\gta2_n64_demo.z64"
-```
+This is an unofficial fan project. GTA 2 and its original assets belong to their respective owners. Retain upstream attribution and consult the notices accompanying each component; code licensing does not grant rights to the original game assets.
