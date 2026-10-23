@@ -10,3 +10,9 @@ tmp_cmp/
 ares_*.txt
 *.log
 gta2_data/
+
+# ROMs (nao distribuidas no repositorio; compiladas localmente pelo usuario)
+*.z64
+*.n64
+*.v64
+rom/

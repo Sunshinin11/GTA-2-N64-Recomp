@@ -55,7 +55,9 @@ The steering and acceleration behavior follows the engine's directional input ma
 
 ## Running
 
-The current ROM snapshot is located at [`rom/gta2_recomp.z64`](rom/gta2_recomp.z64). Use an N64 emulator with accurate homebrew support, such as [ares](https://ares-emu.net/), with **8 MB of RAM / Expansion Pak enabled**.
+To run the game, you must compile `gta2_recomp.z64` locally using your own copy of the GTA 2 PC game data (see [Building from source](#building-from-source)). **Precompiled ROMs are not distributed in this repository.**
+
+Once built, use an N64 emulator with accurate homebrew support, such as [ares](https://ares-emu.net/), with **8 MB of RAM / Expansion Pak enabled**, or test on real hardware using a flash cartridge.
 
 The development target is an N64 with Expansion Pak. Compatibility on a particular flash cartridge or real console should be confirmed by testing; this README does not claim hardware validation.
 
@@ -64,7 +66,7 @@ The development target is an N64 with Expansion Pak. Compatibility on a particul
 The N64 build uses the **libdragon toolchain**, GNU Make, Python 3, and Bash. On Windows, use WSL. The checked-in convenience scripts contain paths from the development machine; for another setup, invoke the Makefile directly from the repository root.
 
 1. Install a compatible [libdragon toolchain and SDK](https://libdragon.dev/). This build also uses `audioconv64` with ULC audio compression support.
-2. Supply the PC game data from your own GTA 2 installation. `GAME_DATA` must point to its `data` directory.
+2. Supply the PC game data from your own GTA 2 installation (freeware release). `GAME_DATA` must point to its `data` directory.
 3. From Bash or WSL, run:
 
 ```bash
@@ -78,7 +80,7 @@ make -f Makefile.recomp \
 
 Adjust `N64_INST` to your toolchain installation. The build stages the selected data files into DragonFS and converts supported data to the byte order and audio formats used by the port. The required entries are listed in [`Makefile.recomp`](Makefile.recomp).
 
-The generated ROM is `gta2_recomp.z64` in the repository root. The committed snapshot under `rom/` is separate and is not automatically replaced by a build.
+The generated ROM will be output as `gta2_recomp.z64` in the repository root.
 
 ## Repository layout
 
@@ -89,7 +91,7 @@ The generated ROM is `gta2_recomp.z64` in the repository root. The committed sna
 | `port/compat/` and `port/compat_ci/` | Compatibility headers |
 | `tools/` | Data conversion and staging utilities |
 | `Makefile.recomp` | Engine and N64 ROM build |
-| `rom/` | Current committed ROM snapshot |
+| `docs/` | Technical reports and project documentation |
 
 ## Credits
 
