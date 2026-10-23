@@ -3,7 +3,7 @@
 // Ajuste so este numero: 60 = 40% menos gente e carros. Pode passar -DN64_POP_PCT=50 no Makefile.
 #ifdef N64
 #ifndef N64_POP_PCT
-#define N64_POP_PCT 10
+#define N64_POP_PCT 40
 #endif
 #else
 #define N64_POP_PCT 100

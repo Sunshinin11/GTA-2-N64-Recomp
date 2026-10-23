@@ -480,8 +480,21 @@ void Game_0x40::UpdatePaused_4B93C0()
 }
 
 MATCH_FUNC(0x4B9410)
+#ifdef N64
+// MEDICAO TEMPORARIA: tempo de cada servico do motor por quadro (lido e impresso pelo render_n64.c)
+extern "C" uint32_t gta2_n64_ticks(void); /* render_n64.c: contador do CPU (TICKS_READ) */
+extern "C" uint32_t gta2_n64_svc_ticks[16];
+uint32_t gta2_n64_svc_ticks[16];
+static uint32_t g_svc_t0;
+#define N64_T(i) do { const uint32_t _t = gta2_n64_ticks(); gta2_n64_svc_ticks[i] += _t - g_svc_t0; g_svc_t0 = _t; } while (0)
+#else
+#define N64_T(i) do { } while (0)
+#endif
 void Game_0x40::UpdateGame_4B9410()
 {
+#ifdef N64
+    g_svc_t0 = gta2_n64_ticks();
+#endif
     Player** ppPlayerIter = field_4_players;
     u32 i = 0;
     while (i < field_23_num_players)
@@ -494,6 +507,7 @@ void Game_0x40::UpdateGame_4B9410()
         ppPlayerIter++;
     }
 
+    N64_T(0); // jogadores
     gCollisionSoundQueue_66AFE0->Reset_40BB90();
     gCollisionCounters_6791FC->ResetCount_478A20();
 
@@ -501,14 +515,21 @@ void Game_0x40::UpdateGame_4B9410()
     {
         gLight_1D4CC_6F5520->Service_45C1E0();
     }
+    N64_T(1); // luzes
 
     gCranePool_D9C_679FD4->CranesService_480E50();
     gCrusherPool_94_67A830->CrushersService_4887F0();
+    N64_T(2); // guindastes + prensas
     gGeneratorPool_14AC_67E5D0->GeneratorsService_4C1D70();
+    N64_T(3); // geradores
     gPedManager_6787BC->PedsService_4703F0();
+    N64_T(4); // peds
     gPublicTransport_181C_6FF1D4->PublicTransportService_57A7A0(); // trains & buses
+    N64_T(5); // trens e onibus
     gGarage_48_6FD26C->GaragesService_5349D0();
+    N64_T(6); // garagens
     gCar_6C_677930->CarsService_446790();
+    N64_T(7); // carros
 
     if (bDo_mike_67D5CC)
     {
@@ -520,12 +541,15 @@ void Game_0x40::UpdateGame_4B9410()
         gTrafficLights_194_705958->TrafficLightsService_5C2950(); // traffic lights
     }
 
+    N64_T(8); // semaforos
     gObject_5C_6F8F84->ObjectsService_5293A0();
+    N64_T(9); // objetos
 
     if (!bSkip_mission_67D4E5)
     {
         gScriptManager_6F8060->ExecuteScriptThreads_5127A0(); // missions
     }
+    N64_T(10); // scripts
 
     gEmergencyCrewPool_706280->ServiceAll_5CBBD0();
 
@@ -538,6 +562,7 @@ void Game_0x40::UpdateGame_4B9410()
     {
         gPolice_7B8_6FEE40->Service_570270();
     }
+    N64_T(11); // emergencia + ambulancia + policia
 
     if (!bSkip_particles_67D64D)
     {
@@ -545,6 +570,7 @@ void Game_0x40::UpdateGame_4B9410()
     }
 
     gTileAnim_2_7052C4->UpdateTileAnimations_5BC310();
+    N64_T(12); // particulas + animacao de tiles
 
     if (bDo_show_timing_67D6DC)
     {
@@ -552,6 +578,7 @@ void Game_0x40::UpdateGame_4B9410()
     }
 
     gHud_2B00_706620->UpdateHUD_5D69D0();
+    N64_T(13); // HUD
     gpRng_67AB34->AdvanceCycle_48B900(); // rng
     gDoor_4D4_67BD2C->DoorsService_49D460();
     gFirefighterPool_54_67D4C0->FireEnginesService_4A85F0(); // fire engines
@@ -570,6 +597,7 @@ void Game_0x40::UpdateGame_4B9410()
     {
         sub_SetGamma();
     }
+    N64_T(14); // portas, bombeiros e resto
 }
 
 MATCH_FUNC(0x4B9640)

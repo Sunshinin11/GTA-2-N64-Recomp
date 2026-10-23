@@ -19,7 +19,14 @@
 #ifdef N64
 #include "render/n64tex.h"
 extern "C" void gta2_n64_tex_forget(const N64Tex* t);
-extern "C" uint32_t gta2_n64_tex_capture(N64Tex* t, float a_scr, float a_tex);
+extern "C" uint32_t gta2_n64_tex_capture(N64Tex* t, float a_scr, float a_tex, int additive);
+extern "C" int gta2_n64_tex_token_empty(uint32_t token);
+extern "C" uint32_t gta2_n64_transparentes;
+/* MEDICAO TEMPORARIA (fogo): 0 focos 1 criadas 2 falhas_pool 3 sprite_draw 4 gbh_draw 5 rejeitadas 6 textura_vazia 7 enviadas 8 alfa 9 blend 10 zoom 11 sem_textura */
+extern "C" { unsigned int gta2_fogo[12]; int gta2_fogo_tag; float gta2_fogo_pos[3]; }
+#include <libdragon.h>
+extern "C" uint64_t gta2_n64_scene_ticks; /* MEDICAO TEMPORARIA (render_n64.c) */
+static uint32_t g_scene_t0;
 #endif
 
 #include "gbh_graphics.hpp"
@@ -270,8 +277,10 @@ u32 LitColour(const Vert& world, u8 multiplier, u32 colour)
 
 void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
 {
+    if (gta2_fogo_tag) ++gta2_fogo[4];
     if (count < 3 || count > 4 || !tex || v[0].z <= 0.0f)
     {
+        if (gta2_fogo_tag) ++gta2_fogo[5];
         return;
     }
     const float tw = tex->field_E_width, th = tex->field_10_height;
@@ -300,7 +309,10 @@ void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
             v[i].spec = 255;
         }
     }
-    if ((flags & kLighting) && gAmbient != 255.0f)
+#ifndef N64_LUZES
+#define N64_LUZES 0 /* 0 = sem luz dinamica (iluminacao fixa, estilo PS1); 1 = luzes do PC (caro: cada vertice percorre todas as luzes) */
+#endif
+    if (N64_LUZES && (flags & kLighting) && gAmbient != 255.0f)
     {
         // The game appends the world-space positions after the screen vertices.
         for (int i = 0; i < count; ++i)
@@ -316,11 +328,24 @@ void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
         const float ax = v[1].x - v[0].x, ay = v[1].y - v[0].y, bx = v[2].x - v[0].x, by = v[2].y - v[0].y;
         const float a_scr = fabsf(ax * by - bx * ay);
         const float a_tex = fabsf((v[1].u - v[0].u) * (v[2].v - v[0].v) - (v[2].u - v[0].u) * (v[1].v - v[0].v));
-        texId = gta2_n64_tex_capture(reinterpret_cast<N64Tex*>(tex->field_1C_ptr), a_scr, a_tex);
+        texId = gta2_n64_tex_capture(reinterpret_cast<N64Tex*>(tex->field_1C_ptr), a_scr, a_tex, blend == kBlendAdditive);
+    }
+    if (gta2_n64_tex_token_empty(texId)) // textura sem nenhum pixel visivel: nao desenharia nada
+    {
+        ++gta2_n64_transparentes;
+        if (gta2_fogo_tag) ++gta2_fogo[6];
+        return;
     }
 #else
     const u32 texId = static_cast<u32>(reinterpret_cast<intptr_t>(tex->field_1C_ptr));
 #endif
+    if (gta2_fogo_tag)
+    {
+        ++gta2_fogo[7];
+        gta2_fogo[8] = v[0].diff >> 24;
+        gta2_fogo[9] = blend;
+        gta2_fogo_pos[0] = v[0].x; gta2_fogo_pos[1] = v[0].y; gta2_fogo_pos[2] = v[0].z;
+    }
     static const int kFan[2][3] = {{0, 1, 2}, {0, 2, 3}};
     for (int t = 0; t < count - 2; ++t)
     {
@@ -482,9 +507,15 @@ s32 CC gbh_AddLight(SLight* l)
 
 void CC gbh_BeginScene()
 {
+#ifdef N64
+    g_scene_t0 = timer_ticks(); /* MEDICAO TEMPORARIA: inicio da parte de desenho do motor */
+#endif
 }
 void CC gbh_EndScene()
 {
+#ifdef N64
+    gta2_n64_scene_ticks += (uint32_t)(timer_ticks() - g_scene_t0);
+#endif
 }
 void CC gbh_BeginLevel()
 {

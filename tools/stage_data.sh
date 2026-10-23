@@ -6,6 +6,12 @@
 src="$1"; out="$2"; shift 2
 here="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$out/data"
+# radios: taxa e qualidade. Se mudar (arquivo de marca diferente), TODAS as radios sao reconvertidas.
+RADIO_RATE=12000
+radio_cfg="ulc35-mono-$RADIO_RATE"
+radio_stamp="${out%/}.radio_cfg"
+radio_force=0
+[ "$(cat "$radio_stamp" 2>/dev/null)" = "$radio_cfg" ] || radio_force=1
 for e in "$@"; do
   case "$e" in
     */*) m=$(find "$src" -maxdepth 2 -ipath "$src/$e" | head -1) ;;   # ex.: audio/bil.raw
@@ -21,15 +27,20 @@ for e in "$@"; do
         python3 "$here/le2be.py" "$f" "$out/data/$low" || { echo "ERRO convertendo $f"; exit 1; } ;;
       gtaudio/*.wav)
         dst="$out/data/${low%.wav}.wav64"
-        if [ ! -f "$dst" ] || [ "$f" -nt "$dst" ]; then
-          echo "    [RADIO] $low (ULC mono 16 kHz)"
-          "${N64_INST:-/opt/libdragon}/bin/audioconv64" --wav-compress ulc,quality=35 --wav-mono --wav-resample 16000 \
+        if [ "$radio_force" = 1 ] || [ ! -f "$dst" ] || [ "$f" -nt "$dst" ]; then
+          echo "    [RADIO] $low (ULC mono $RADIO_RATE Hz)"
+          "${N64_INST:-/opt/libdragon}/bin/audioconv64" --wav-compress ulc,quality=35 --wav-mono --wav-resample "$RADIO_RATE" \
             -o "$out/data/gtaudio" "$f" >/dev/null || { echo "ERRO convertendo $f"; exit 1; }
-          [ -f "$dst" ] || mv "$out/data/gtaudio/$(basename "${f%.*}").wav64" "$dst" 2>/dev/null
+          produced="$out/data/gtaudio/$(basename "${f%.*}").wav64"   # audioconv64 usa o nome original (pode ter maiusculas)
+          [ "$produced" != "$dst" ] && [ -f "$produced" ] && mv -f "$produced" "$dst" 2>/dev/null
         fi ;;
+      *.scr)
+        # scripts de missao: conversao campo a campo (tools/scr_le2be.py + scr_tabela.json)
+        python3 "$here/scr_le2be.py" "$f" "$out/data/$low" || { echo "ERRO convertendo $f"; exit 1; } ;;
       audio/*.raw|audio/*.sdt)
         python3 "$here/audio_le2be.py" "$f" "$out/data/$low" || { echo "ERRO convertendo $f"; exit 1; } ;;
       *) cp -u "$f" "$out/data/$low" ;;
     esac
   done < <(find "$m" -type f)
 done
+echo "$radio_cfg" > "$radio_stamp"

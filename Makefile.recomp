@@ -13,7 +13,7 @@ N64_LDFLAGS += --wrap=malloc --wrap=calloc --wrap=realloc
 GAME_DATA ?= ../gta2_data/data
 FS_DIR     = filesystem_recomp
 # Arquivos/pastas de dados para o boot (sem diferenciar maiusculas). Ajuste a lista conforme o motor for pedindo (veja o log "fopen(...)").
-DATA_ENTRIES ?= fstyle.sty e.gxt s.gxt bil.gmp bil.sty nyc.gci test1.seq attract keyboard frontend audio/bil.raw audio/bil.sdt audio/fstyle.raw audio/fstyle.sdt \
+DATA_ENTRIES ?= fstyle.sty e.gxt s.gxt bil.gmp bil.sty bil.scr bil nyc.gci test1.seq attract keyboard frontend audio/bil.raw audio/bil.sdt audio/fstyle.raw audio/fstyle.sdt \
                 gtaudio/1.wav gtaudio/4.wav gtaudio/5.wav gtaudio/10.wav gtaudio/11.wav \
                 gtaudio/5a.wav gtaudio/10a.wav gtaudio/11a.wav gtaudio/101a.wav
 
@@ -31,7 +31,11 @@ CXX_ENGINE = $(CXX_STD) -fshort-wchar -fms-extensions -fpermissive -w -DGTA2_POR
              -Iport/compat -Iport/compat_ci -Iport/n64 -Iport/gta2_re/Source -Iport/gta2_re -MMD -MP
 
 # Motor: otimiza por tamanho (a RAM do N64 e o gargalo; o codigo ocupa ~1,9 MB dos 8 MB).
-$(ENGINE_OBJS): N64_CXXFLAGS += -Os
+# Arquivos mais pesados por quadro (mapa, sprites, colisao, fisica do carro, matematica): -O2 (mais rapido, codigo maior).
+HOT_ENGINE := MapRenderer sprite SpriteRenderer_1C SpriteGrid_400 Draw map_0x370 collide CarPhysics_B0 Fix16_Point fix16 ang16 angle
+HOT_OBJS := $(addprefix $(OBJ_DIR)/port/gta2_re/Source/,$(addsuffix .o,$(HOT_ENGINE)))
+$(filter-out $(HOT_OBJS),$(ENGINE_OBJS)): N64_CXXFLAGS += -Os
+$(HOT_OBJS): N64_CXXFLAGS += -O2
 
 # crt_stubs.cpp usa especificacoes de excecao dinamicas (invalidas em C++17); a camada n64 foi validada em C++14.
 $(OBJ_DIR)/port/gta2_re/Source/crt_stubs.o $(PLAT_OBJS): CXX_STD = -std=gnu++14

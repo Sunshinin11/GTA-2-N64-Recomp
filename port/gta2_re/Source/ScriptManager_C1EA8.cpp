@@ -416,7 +416,10 @@ void ScriptManager_C1EA8::GetScrFileName_5122D0()
 MATCH_FUNC(0x512330)
 void ScriptManager_C1EA8::Load_512330(const char_type* pScrName)
 {
-#ifdef N64
+#ifndef N64_SCRIPT_SINTETICO
+#define N64_SCRIPT_SINTETICO 0 /* 1 = volta ao script sintetico (sem missoes); 0 = .scr real convertido por tools/scr_le2be.py */
+#endif
+#if defined(N64) && N64_SCRIPT_SINTETICO
     // N64: o .scr do PC (little-endian, com unioes e ponteiros) nao e' portavel. Usa um script sintetico minimo:
     // 1 = PLAYER_PED (posicao inicial real do mapa bil), 2 = LEVELSTART -> 3 = laco inofensivo (SAVE_RESPECT em si mesmo).
     if (!bSkip_mission_67D4E5)
@@ -503,8 +506,14 @@ u16 ScriptManager_C1EA8::LoadMissionScript_512400(const char_type* String1, u16*
     if (gScriptManager_6F8060->field_2F4_bPreloadMissionScripts == 0)
     {
         u32 v8;
+#ifdef N64
+        // N64: sem pre-carregamento, a missao vem da pasta do distrito (como no caminho de pre-carregamento: data\\bil\\...)
+        sprintf(gTmpBuffer_67C598, "data\\%s\\", field_45C_scr_file_name);
+        strcat(gTmpBuffer_67C598, (const char*)String1);
+#else
         strcpy(gTmpBuffer_67C598, "data\\");
         strcat(gTmpBuffer_67C598, (const char*)String1);
+#endif
         Error_SetName_4A0770(gTmpBuffer_67C598);
         File::Global_Open_4A7060(gTmpBuffer_67C598);
         File::Global_Read_4A71C0(&Buffer, 2);
@@ -946,7 +955,12 @@ ScriptManager_C1EA8::ScriptManager_C1EA8()
     memset(field_C1D72_mission_base_ptr_idx, 0, sizeof(field_C1D72_mission_base_ptr_idx));
     memset(field_C1DB0_mission_script_data_len, 0, sizeof(field_C1DB0_mission_script_data_len));
     field_344_mission_flag = 0;
+#ifdef N64
+    // N64: sem pre-carregamento (os buffers de 715 KB foram reduzidos no .hpp); cada missao e' lida do arquivo ao comecar
+    field_2F4_bPreloadMissionScripts = 0;
+#else
     field_2F4_bPreloadMissionScripts = 1;
+#endif
     field_C1E2C_bLoadedFromSave = 0;
     field_310_finish_score = 0;
     field_314_total_missions = 0;

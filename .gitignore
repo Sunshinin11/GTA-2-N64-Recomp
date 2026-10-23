@@ -1,4 +1,4 @@
-﻿*.bak*
+*.bak*
 build/
 build_recomp/
 build_probe/
@@ -6,5 +6,7 @@ filesystem/
 filesystem_recomp/
 deps/
 capturas/
+tmp_cmp/
+ares_*.txt
 *.log
 gta2_data/

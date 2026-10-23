@@ -313,7 +313,14 @@ void Camera_0xBC::ApplyCarVelocityCameraOffset_436200(Car_BC* pCar, Fix16* pX, F
 
     if (speed > dword_67674C)
     {
+#ifdef N64
+#ifndef N64_CAM_SPEED_PCT
+#define N64_CAM_SPEED_PCT 15 /* % da subida original da camera no carro (100 = PC). 15 = perto do PS1, um pouco mais alto */
+#endif
+        *pZ += speed * N64_CAM_SPEED_PCT / 100;
+#else
         *pZ += speed;
+#endif
 
         if (!pCar->IsTrainModel_403BA0() && !pCar->IsTank_411900())
         {

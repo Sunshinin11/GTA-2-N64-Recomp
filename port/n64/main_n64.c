@@ -93,7 +93,7 @@ void gta2_n64_print_mem(const char *tag)
     {
         extern char end[]; /* fim do bss (linker) */
         void *brk = sbrk(0);
-        static const unsigned sizes[] = {64, 128, 256, 512, 1024, 2048, 4096};
+        static const unsigned sizes[] = {64, 128, 256, 512, 1024}; /* ate 1 MB: com a RAM quase cheia, 4 MB invadia a area da pilha */
         printf("[mem %s] fim_bss=%08X brk=%08X  teste malloc(KB):", tag, (unsigned)(uintptr_t)end, (unsigned)(uintptr_t)brk);
         for (unsigned i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
             void *p = malloc((size_t)sizes[i] * 1024);
@@ -252,7 +252,8 @@ static void hc_tick(void *ra)
     g_hc_last_ra = ra;
     if (g_in_log) return;
     ++g_hc_count;
-    if ((g_hc_count & 31) == 0 || g_big_total >= 9800u * 1024u) gta2_n64_heap_check("periodico", ra);
+    /* checagem periodica do heap desligada (diagnostico do inicio do port; percorria o heap inteiro a cada 32 alocacoes) */
+    (void)ra;
 }
 void *__wrap_malloc(size_t n)
 {

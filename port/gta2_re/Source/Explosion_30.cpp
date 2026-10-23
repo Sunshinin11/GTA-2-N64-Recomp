@@ -964,6 +964,26 @@ char_type Explosion_30::Update_5434A0(Fix16 speed, Ang16 ang)
         return 1;
     }
 
+#ifdef N64
+    /* MEDICAO TEMPORARIA (fogo): focos de fogo atualizados e particulas de chama criadas */
+    if (IsFireType_5435D0())
+    {
+        extern unsigned int gta2_fogo[12];
+        const u16 n64_antes = gParticleInstCount_6FD5F4;
+        ++gta2_fogo[0];
+        switch (this->field_10_type)
+        {
+            case explosion_type::fire_3:
+            case explosion_type::car_fire_level1_12: Explosion_30::EmitFireTrail_3_12_540D30(ang, speed); break;
+            case explosion_type::car_fire_level2_13:
+            case explosion_type::car_fire_level3_14: Explosion_30::EmitFireTrail_13_14_5411E0(ang, speed); break;
+            case explosion_type::car_fire_4: Explosion_30::EmitFireTrail_4_540F90(ang, speed); break;
+            default: Explosion_30::EmitFireTrail_5_541430(ang, speed); break;
+        }
+        gta2_fogo[1] += (u16)(gParticleInstCount_6FD5F4 - n64_antes);
+        return 0;
+    }
+#endif
     switch (this->field_10_type)
     {
         case explosion_type::fire_3:
@@ -1186,6 +1206,9 @@ s32 ExplosionPool_7A8::FreeLowestPriority_543690()
         cur_idx = ++idx;
     } while (idx < GTA2_COUNTOF(field_0_explosions));
     this->field_0_explosions[lowest_idx].field_1A_timer = 0;
+#ifdef N64
+    return lowest_idx; // o original nao retorna nada aqui; sem isto o GCC nao gera a saida da funcao
+#endif
 }
 #pragma warning(pop)
 

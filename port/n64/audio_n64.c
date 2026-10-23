@@ -8,12 +8,14 @@
 #include <libdragon.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
+#include <malloc.h>
 #include <stdio.h>
 
-#define NVOICE      20    /* canais do mixer para efeitos (0..19) */
+#define NVOICE      14    /* canais do mixer para efeitos (0..13); cheio = rouba o som mais antigo */
 #define NSTREAM     2     /* streams do Miles: 0 = radio, 1 = falas; canais NVOICE.. */
 #define NWAVE       384   /* formas de onda distintas (banco tem 320 entradas) */
-#define OUT_FREQ    32000
+#define OUT_FREQ    22050 /* efeitos ja sao 22050 Hz e radios 16 kHz: 32 kHz so gastava CPU/RSP */
 #define MAX_FREQ    66150.0f /* teto por canal: 3x 22050 Hz (o jogo sobe o tom dos efeitos, ex.: 50292 Hz) */
 
 typedef struct {
@@ -22,7 +24,17 @@ typedef struct {
     int32_t loop_start, loop_end; /* bytes, relativos ao inicio; loop_end -1 = fim */
     int loops;            /* 0 = infinito */
     waveform_t wf;
+    uint8_t *ram;         /* copia na RAM (cache de efeitos) ou NULL */
+    void *ram_alloc;      /* bloco alocado (ram pode estar 1 byte adiante, pela paridade do DMA) */
+    uint32_t last_use;    /* para tirar do cache o usado ha mais tempo */
+    uint8_t plays;        /* quantas vezes tocou (sons sem loop entram no cache a partir da 2a) */
 } Wave;
+
+/* cache de efeitos na RAM: o mixer pede ~140 bytes por vez, e cada DMA da ROM custa ~45 us so de preparo */
+#define FXCACHE_MAX      (256u * 1024u) /* total na RAM (uso real nos testes: ate ~260 KB) */
+#define FXCACHE_ITEM_MAX (64u * 1024u)  /* maior som que entra no cache */
+static uint32_t g_fxcache_bytes, g_fxcache_tick;
+uint32_t gta2_n64_fxcache_in, gta2_n64_fxcache_out; /* MEDICAO TEMPORARIA: sons que entraram/sairam do cache */
 
 typedef struct {
     int id;               /* handle do Miles (0 = livre) */
@@ -39,23 +51,35 @@ extern void gta2_n64_rom_copy(void *dst, const void *src, unsigned len); /* rend
 
 static inline int in_rom(const void *p) { const uintptr_t a = (uintptr_t)p; return a >= 0xB0000000u && a < 0xC0000000u; }
 
+/* MEDICAO TEMPORARIA: tempo e chamadas da leitura de efeitos (lidas pelo render_n64.c no [perf2]) */
+uint64_t gta2_n64_wave_ticks;
+uint32_t gta2_n64_wave_calls, gta2_n64_wave_cpu, gta2_n64_wave_bytes;
+
 static void wave_read(void *ctx, samplebuffer_t *sbuf, int wpos, int wlen, bool seeking)
 {
     (void)seeking;
+    const uint32_t t_w0 = timer_ticks(); /* MEDICAO TEMPORARIA */
     Wave *w = (Wave *)ctx;
     uint8_t *dst = (uint8_t *)samplebuffer_append(sbuf, wlen);
     const uint32_t off = (uint32_t)wpos * 2u;
     uint32_t n = (uint32_t)wlen * 2u, have = 0;
     if (off < w->len) have = w->len - off;
     if (have > n) have = n;
-    if (have) {
+    if (have && w->ram) {
+        memcpy(dst, w->ram + off, have); /* som no cache da RAM */
+    } else if (have) {
         const uint8_t *src = w->data + off;
         if (in_rom(src) && (((uintptr_t)src ^ (uintptr_t)dst) & 1u) == 0u)
             dma_read(dst, (uint32_t)((uintptr_t)src & 0x1FFFFFFFu), have); /* espera o PI e le em DMA */
         else
+        {
             gta2_n64_rom_copy(dst, src, have);                              /* RAM, ou paridade diferente */
+            ++gta2_n64_wave_cpu;
+        }
     }
     if (have < n) memset(dst + have, 0, n - have);
+    gta2_n64_wave_ticks += (uint32_t)(timer_ticks() - t_w0); /* MEDICAO TEMPORARIA */
+    ++gta2_n64_wave_calls; gta2_n64_wave_bytes += have;
 }
 
 static Wave *wave_get(const void *data, uint32_t len, int loops, int32_t ls, int32_t le)
@@ -83,6 +107,45 @@ static Wave *wave_get(const void *data, uint32_t len, int loops, int32_t ls, int
     w->wf.read = wave_read;
     w->wf.ctx = w;
     return w;
+}
+
+uint32_t gta2_n64_fxcache_kb(void) { return g_fxcache_bytes / 1024u; } /* MEDICAO TEMPORARIA */
+
+static void fxcache_free(Wave *w)
+{
+    if (!w->ram) return;
+    w->ram = NULL; /* antes de liberar: uma leitura seguinte volta para a ROM */
+    free(w->ram_alloc);
+    w->ram_alloc = NULL;
+    g_fxcache_bytes -= w->len;
+    ++gta2_n64_fxcache_out;
+}
+
+/* poe o som no cache da RAM: sons em loop ja na 1a vez, os demais a partir da 2a */
+static void fxcache_touch(Wave *w)
+{
+    w->last_use = ++g_fxcache_tick;
+    if (w->plays < 255) ++w->plays;
+    if (w->ram || !in_rom(w->data) || w->len == 0 || w->len > FXCACHE_ITEM_MAX) return;
+    if (w->loops != 0 && w->plays < 2) return;
+    while (g_fxcache_bytes + w->len > FXCACHE_MAX) { /* libera os usados ha mais tempo */
+        Wave *old = NULL;
+        for (int i = 0; i < g_nwave; ++i)
+            if (g_wave[i].ram && &g_wave[i] != w && (!old || g_wave[i].last_use < old->last_use)) old = &g_wave[i];
+        if (!old) return;
+        fxcache_free(old);
+    }
+    const uintptr_t odd = (uintptr_t)w->data & 1u;          /* dma_read exige a mesma paridade na RAM e na ROM */
+    const uint32_t sz = (w->len + (uint32_t)odd + 15u) & ~15u; /* linhas de cache inteiras so deste bloco */
+    void *blk = memalign(16, sz);
+    if (!blk) return;
+    uint8_t *ram = (uint8_t *)blk + odd;
+    data_cache_hit_writeback_invalidate(blk, sz);
+    dma_read(ram, (uint32_t)((uintptr_t)w->data & 0x1FFFFFFFu), w->len);
+    w->ram_alloc = blk;
+    w->ram = ram;
+    g_fxcache_bytes += w->len;
+    ++gta2_n64_fxcache_in;
 }
 
 static int voice_find(int id)
@@ -135,6 +198,7 @@ void gta2_n64_sfx_start(int id, const void *data, int len, int rate, int format,
     if (!in_rom(data)) return;                           /* banco ainda nao mapeado da ROM */
     Wave *w = wave_get(data, (uint32_t)len & ~1u, loops, loop_start, loop_end);
     if (!w) return;
+    fxcache_touch(w);
     int ch = voice_find(id);
     if (ch < 0) for (int c = 0; c < NVOICE; ++c) if (!mixer_ch_playing(c)) { ch = c; break; }
     if (ch < 0) { /* todos ocupados: rouba o mais antigo */

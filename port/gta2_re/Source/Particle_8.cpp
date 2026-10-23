@@ -76,6 +76,13 @@ Particle_4C* Particle_8::New_53E3C0(Fix16 speed_x, Fix16 speed_y, Fix16 a4, Fix1
         pNew4C->field_30_pNext = gSprite_Pool_703818->get_new_sprite();
         ++gParticleInstCount_6FD5F4;
     }
+#ifdef N64
+    else
+    {
+        extern unsigned int gta2_fogo[12]; /* MEDICAO TEMPORARIA: particula nao criada (pool cheio) */
+        ++gta2_fogo[2];
+    }
+#endif
     return pNew4C;
 }
 

@@ -27,6 +27,11 @@
 #include "root_sound.hpp"
 #include "TextureCache_15D8.hpp"
 #include "winmain.hpp" // TODO: only because of gLighting_626A09
+#ifdef N64
+#include "ObjectDefinitions_8CA8.hpp"
+extern "C" unsigned int gta2_fogo[12]; /* MEDICAO TEMPORARIA (fogo) */
+extern "C" int gta2_fogo_tag;
+#endif
 
 // Forward declarations: the functions below are in address order
 EXPORT void __stdcall ProjectOntoAxis_5A5AA0(const Fix16& xpos1, const Fix16& ypos1, const Ang16& angle, Fix16& xpos2, Fix16& ypos2, Fix16& outX, Fix16& outY);
@@ -1100,6 +1105,19 @@ void Sprite::Draw_59EFF0()
     u32 car_flags;
 
     Sprite::Update_4C_59F990();
+#ifdef N64
+    int n64_fogo = 0; /* MEDICAO TEMPORARIA: sprite de chama (particula code_obj2, ids 0, 96-102, 147-151 do def112) */
+    if (field_30_sprite_type_enum == sprite_types_enum::code_obj2_8)
+    {
+        const int rel = field_22_sprite_id - gObjectDefinitions_6FCF00->field_8CA4_def112_sprite_palette;
+        if (rel == 0 || (rel >= 96 && rel <= 102) || (rel >= 147 && rel <= 151))
+        {
+            n64_fogo = 1;
+            ++gta2_fogo[3];
+            if (field_38_zoom != 0) ++gta2_fogo[10];
+        }
+    }
+#endif
     if (field_38_zoom != 0)
     {
         sprite_idx = gGtx_0x106C_703DD4->field_4_sprite_index_count - 1;
@@ -1231,7 +1249,14 @@ void Sprite::Draw_59EFF0()
         pgbh_DrawQuad(8576, pTexture, pShadowVerts, 255);
     }
 
+#ifdef N64
+    gta2_fogo_tag = n64_fogo;
+    if (n64_fogo && !pTexture) ++gta2_fogo[11];
+#endif
     pgbh_DrawQuad(Sprite::ComputeDrawFlags_4BAC60(), pTexture, gTileVerts_7036D0, 255);
+#ifdef N64
+    gta2_fogo_tag = 0;
+#endif
 
     if (pCar && gLighting_626A09)
     {
