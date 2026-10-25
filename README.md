@@ -12,6 +12,12 @@ RDP renderer, audio, input and file layer. Tested in the [ares](https://ares-emu
 
 Personal / educational project. Not affiliated with or endorsed by Rockstar Games or Take-Two Interactive.
 
+## Project status: finished
+
+This project is **finished**. The port runs as a playable tech demo on real hardware and in ares, and **no further
+development, new features or support are planned**. The repository is kept as-is for reference and learning.
+You are welcome to fork it and take it further.
+
 ## Important: the game is NOT included
 
 This project is only the **port code**. **We do not provide, host, link or distribute GTA 2** in any form: no game data,
@@ -93,6 +99,7 @@ Pass them to `build.sh` or `make -f Makefile.recomp`:
 | `INCLUDE_FRONTEND=0` | Leave out the menu screens (smaller ROM; hold Z at boot to jump straight into the map) |
 | `RADIO_RATE=12000` | Radio sample rate in Hz (`8000` = smaller) |
 | `N64_INST=/path` | libdragon install location |
+| `OVERSCAN_X=36` `OVERSCAN_Y=28` | Safe-area borders in VI dots (640x480 base) so TVs/upscalers do not crop the picture edges. `0` = full image (emulator) |
 
 `bash build.sh clean` removes the build output; `bash setup_engine.sh --force` redoes the engine checkout.
 

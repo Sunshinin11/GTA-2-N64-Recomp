@@ -134,6 +134,15 @@ int main(void)
     console_init();
     console_set_debug(true);
     console_set_render_mode(RENDER_MANUAL);
+    /* margem de seguranca (overscan): sem ela, upscalers/TVs cortam as bordas (HUD, cantos). Valores em pontos do VI (640x480);
+       ajuste com -DN64_OVERSCAN_X=.. -DN64_OVERSCAN_Y=.. (0 = imagem inteira, como no emulador). Tem que vir DEPOIS do console_init(). */
+#ifndef N64_OVERSCAN_X
+#define N64_OVERSCAN_X 36
+#endif
+#ifndef N64_OVERSCAN_Y
+#define N64_OVERSCAN_Y 28
+#endif
+    vi_set_borders((vi_borders_t){ N64_OVERSCAN_X, N64_OVERSCAN_X, N64_OVERSCAN_Y, N64_OVERSCAN_Y });
     /* resolucao: console_init() deixa a tela em 640x240 (mesma configuracao do build que ficou sem linhas) */
     timer_init();
     gta2_install_exception_fixups();

@@ -59,6 +59,11 @@ $(OBJ_DIR)/%.o: %.cpp
 	@echo "    [CXX] $<"
 	$(N64_CXX) $(N64_CXXFLAGS) $(CXX_ENGINE) -c $< -o $@
 
+# Margem de seguranca de video (pontos do VI, base 640x480). 0 = imagem inteira (emulador); aumente se a TV/upscaler cortar as bordas.
+OVERSCAN_X ?= 36
+OVERSCAN_Y ?= 28
+$(OBJ_DIR)/port/n64/main_n64.o: N64_CFLAGS += -DN64_OVERSCAN_X=$(OVERSCAN_X) -DN64_OVERSCAN_Y=$(OVERSCAN_Y)
+
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "    [CC]  $<"
