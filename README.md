@@ -1,6 +1,6 @@
-# GTA 2 for Nintendo 64 (tech demo port)
+# GTA 2 for Nintendo 64
 
-A work-in-progress port of the PC game **Grand Theft Auto 2** to the **Nintendo 64**, built on the
+A finished port of the PC game **Grand Theft Auto 2** to the **Nintendo 64**, built on the
 [`gta2_re`](https://github.com/CriminalRETeam/gta2_re) decompilation and [libdragon](https://github.com/DragonMinded/libdragon).
 The original game logic runs on the console (**Expansion Pak / 8 MB RAM required**) on top of a custom
 RDP renderer, audio, input and file layer. Tested in the [ares](https://ares-emu.net/) emulator.
