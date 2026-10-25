@@ -243,11 +243,25 @@ STexture* NewTexture(s32 w, s32 h, BYTE* data)
 // Window and lights
 float gWinLeft = 0, gWinTop = 0, gWinRight = 640, gWinBottom = 480;
 float gAmbient = 255.0f; // ambient * 255, as the original driver keeps it
+// Luzes: ligadas no modo PC, desligadas no modo PSX (opcao MODO do menu): 0 = sem luz (mais rapido), 2 = suave por canto do bloco (padrao, ~9%). O modo 1 (chapada por quadrilatero) existe no codigo mas nao esta no menu.
+#ifndef N64_LUZES
+#define N64_LUZES 0 /* padrao = modo PSX (sem luzes); o menu liga/desliga junto com o modo PC/PSX */
+#endif
+int gN64Luzes = N64_LUZES;
+extern "C" int gta2_n64_get_luzes(void)
+{
+    return gN64Luzes >= 2 ? 1 : 0; // menu: 0 = desligadas, 1 = ligadas (suaves)
+}
+extern "C" void gta2_n64_set_luzes(int v)
+{
+    gN64Luzes = v > 0 ? 2 : 0;
+}
 
 struct Light
 {
     u32 flags;
     float brightness, radius, radiusSq, invRadius, x, y, z, r, g, b;
+    float invRadiusSq, pr, pg, pb; // N64: 1/raio^2 e cor*brilho (por luz, calculados uma vez)
 };
 Light gLights[256];
 u32 gLightCount = 0;
@@ -255,35 +269,106 @@ u32 gLightCount = 0;
 u16 gActiveLights[256];
 u32 gActiveCount = 0;
 
-// 'ls' = luzes que alcancam este desenho (ja cortadas por distancia ao quadrilatero): o resultado e' o mesmo de percorrer todas.
-u32 LitColour(const Vert& world, u8 multiplier, u32 colour, const Light* const* ls, u32 nls)
+// N64: grade espacial das luzes ativas (celulas de 4x4 blocos, 32x32 celulas com repeticao = 128 blocos, mais que a tela).
+// Cada luz entra em todas as celulas que o seu raio toca; um desenho so olha as celulas sob a sua caixa em vez de testar todas as
+// luzes (antes: ~N luzes x ~centenas de desenhos por quadro). O resultado e' o mesmo: as luzes candidatas passam pelo mesmo teste
+// exato de distancia. Dedupe por carimbo (uma luz aparece em varias celulas).
+constexpr int kBinDim = 32;
+constexpr int kBinPool = 3072;
+int16_t gBinHead[kBinDim * kBinDim];
+int16_t gBinNext[kBinPool];
+uint8_t gBinLight[kBinPool];
+u32 gBinUsed = 0;
+u32 gLightStamp[256];
+u32 gDrawStamp = 0;
+inline int BinCell(float v)
 {
-    float lr = 0, lg = 0, lb = 0;
+    const int c = static_cast<int>(v * 0.25f);
+    return c < 0 ? 0 : c;
+}
+void BinInsert(u32 idx)
+{
+    const Light& l = gLights[idx];
+    const int x0 = BinCell(l.x - l.radius), x1 = BinCell(l.x + l.radius);
+    const int y0 = BinCell(l.y - l.radius), y1 = BinCell(l.y + l.radius);
+    for (int cy = y0; cy <= y1; ++cy)
+    {
+        for (int cx = x0; cx <= x1; ++cx)
+        {
+            if (gBinUsed >= static_cast<u32>(kBinPool))
+            {
+                return; // pool cheio: a luz some so nas celulas restantes (nao deveria acontecer)
+            }
+            const int cell = (cx & (kBinDim - 1)) + (cy & (kBinDim - 1)) * kBinDim;
+            gBinLight[gBinUsed] = static_cast<uint8_t>(idx);
+            gBinNext[gBinUsed] = gBinHead[cell];
+            gBinHead[cell] = static_cast<int16_t>(gBinUsed++);
+        }
+    }
+}
+
+// 'ls' = luzes que alcancam este desenho (ja cortadas por distancia ao quadrilatero): o resultado e' o mesmo de percorrer todas.
+// N64: a soma das luzes e' calculada UMA vez por desenho (no centro do quadrilatero) e aplicada aos 4 vertices: iluminacao "chapada" por
+// quadrilatero (estilo PS1), ~4x mais barata que por vertice. Cada vertice ainda multiplica pela sua propria cor (diff).
+struct LightSum
+{
+    float r, g, b;
+};
+LightSum SumLights(const Vert& world, const Light* const* ls, u32 nls)
+{
+    LightSum o = {0, 0, 0};
     for (u32 i = 0; i < nls; ++i)
     {
         const Light& l = *ls[i];
         const float dx = world.x - l.x, dy = world.y - l.y, dz = world.z - l.z;
         const float d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 > l.radiusSq)
+        // queda quadratica (1 - d2/r2)^2 no lugar da linear (r - d)/r: sem sqrtf, visual parecido (um pouco mais macio).
+        const float t = 1.0f - d2 * l.invRadiusSq;
+        if (t > 0.0f)
         {
-            continue;
-        }
-        const float att = (l.radius - sqrtf(d2)) * l.invRadius;
-        if (att > 0)
-        {
-            const float k = att * l.brightness;
-            lr += l.r * k;
-            lg += l.g * k;
-            lb += l.b * k;
+            const float k = t * t;
+            o.r += l.pr * k;
+            o.g += l.pg * k;
+            o.b += l.pb * k;
         }
     }
-    const float m = multiplier / 255.0f;
-    auto ch = [&](u32 c, float light) {
-        const float v = m * c * light + gAmbient;
-        return static_cast<u32>(v > 255 ? 255 : v < 0 ? 0 : v);
-    };
-    return (colour & 0xFF000000) | (ch((colour >> 16) & 0xFF, lr) << 16) | (ch((colour >> 8) & 0xFF, lg) << 8) |
-        ch(colour & 0xFF, lb);
+    return o;
+}
+// Cache por quadro da soma de luz por PONTO do mundo: os cantos de blocos vizinhos coincidem (cada canto e' compartilhado por ate 4 quadrilateros),
+// entao cada canto e' calculado uma vez. Como a lista de luzes de cada desenho cobre a caixa inteira do quadrilatero, a soma num canto
+// nao depende de qual desenho a calculou. Mantem a iluminacao suave (gouraud) pelo custo de ~1 calculo por quadrilatero.
+struct LCacheEnt
+{
+    int16_t qx, qy, qz;
+    uint16_t epoch;
+    LightSum s;
+};
+constexpr int kLCacheN = 1024;
+LCacheEnt gLCache[kLCacheN];
+uint16_t gLEpoch = 1; // sobe a cada ResetLights (uma vez por quadro)
+inline const LightSum& CachedSum(const Vert& w, const Light* const* ls, u32 nls)
+{
+    const int qx = static_cast<int>(w.x * 32.0f + 0.5f), qy = static_cast<int>(w.y * 32.0f + 0.5f), qz = static_cast<int>(w.z * 32.0f + 0.5f);
+    const u32 h = (static_cast<u32>(qx) * 73856093u ^ static_cast<u32>(qy) * 19349663u ^ static_cast<u32>(qz) * 83492791u) >> 7;
+    LCacheEnt& e = gLCache[h & (kLCacheN - 1)];
+    if (e.epoch != gLEpoch || e.qx != static_cast<int16_t>(qx) || e.qy != static_cast<int16_t>(qy) || e.qz != static_cast<int16_t>(qz))
+    {
+        e.s = SumLights(w, ls, nls);
+        e.qx = static_cast<int16_t>(qx), e.qy = static_cast<int16_t>(qy), e.qz = static_cast<int16_t>(qz);
+        e.epoch = gLEpoch;
+    }
+    return e.s;
+}
+inline u32 LitApply(const LightSum& L, float m, u32 colour)
+{
+    const float amb = gAmbient;
+    float r = m * static_cast<float>((colour >> 16) & 0xFF) * L.r + amb;
+    float g = m * static_cast<float>((colour >> 8) & 0xFF) * L.g + amb;
+    float b = m * static_cast<float>(colour & 0xFF) * L.b + amb;
+    r = r > 255.0f ? 255.0f : r;
+    g = g > 255.0f ? 255.0f : g;
+    b = b > 255.0f ? 255.0f : b;
+    return (colour & 0xFF000000) | (static_cast<u32>(r) << 16) | (static_cast<u32>(g) << 8) | static_cast<u32>(b);
 }
 
 void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
@@ -318,16 +403,13 @@ void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
             v[i].spec = 255;
         }
     }
-#ifndef N64_LUZES
-#define N64_LUZES 0 /* 0 = sem luz dinamica (estilo PS1, padrao). 1 = luzes do PC ligadas (custa 3-13 ms/frame). Para ligar de novo, troque para 1 */
-#endif
-    if (N64_LUZES && (flags & kLighting) && gAmbient != 255.0f)
+    if (gN64Luzes && (flags & kLighting) && gAmbient != 255.0f)
     {
         // The game appends the world-space positions after the screen vertices.
-        // Corte por desenho: caixa dos pontos do mundo do quadrilatero; luz cuja menor distancia a caixa ja passa do raio
-        // nao chega a nenhum vertice (att <= 0), entao sai da lista sem mudar o resultado.
-        const Light* near_ls[48];
+        // Caixa dos pontos do mundo do quadrilatero; so as luzes das celulas sob a caixa entram, e entre elas so as cujo raio alcanca a caixa.
+        static const Light* near_ls[48]; // static: sem preenchimento do compilador a cada desenho
         u32 nnear = 0;
+        if (gActiveCount)
         {
             float bx0 = v[4].x, bx1 = v[4].x, by0 = v[4].y, by1 = v[4].y, bz0 = v[4].z, bz1 = v[4].z;
             for (int i = 1; i < count; ++i)
@@ -340,21 +422,70 @@ void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
                 if (w.z < bz0) bz0 = w.z;
                 if (w.z > bz1) bz1 = w.z;
             }
-            for (u32 k = 0; k < gActiveCount && nnear < 48; ++k)
+            ++gDrawStamp;
+            const int cx0 = BinCell(bx0), cx1 = BinCell(bx1), cy0 = BinCell(by0), cy1 = BinCell(by1);
+            for (int cy = cy0; cy <= cy1 && nnear < 48; ++cy)
             {
-                const Light& l = gLights[gActiveLights[k]];
-                const float dx = l.x < bx0 ? bx0 - l.x : (l.x > bx1 ? l.x - bx1 : 0.0f);
-                const float dy = l.y < by0 ? by0 - l.y : (l.y > by1 ? l.y - by1 : 0.0f);
-                const float dz = l.z < bz0 ? bz0 - l.z : (l.z > bz1 ? l.z - bz1 : 0.0f);
-                if (dx * dx + dy * dy + dz * dz <= l.radiusSq)
+                for (int cx = cx0; cx <= cx1; ++cx)
                 {
-                    near_ls[nnear++] = &l;
+                    const int cell = (cx & (kBinDim - 1)) + (cy & (kBinDim - 1)) * kBinDim;
+                    for (int e = gBinHead[cell]; e >= 0 && nnear < 48; e = gBinNext[e])
+                    {
+                        const u32 li = gBinLight[e];
+                        if (gLightStamp[li] == gDrawStamp)
+                        {
+                            continue;
+                        }
+                        gLightStamp[li] = gDrawStamp;
+                        const Light& l = gLights[li];
+                        const float dx = l.x < bx0 ? bx0 - l.x : (l.x > bx1 ? l.x - bx1 : 0.0f);
+                        const float dy = l.y < by0 ? by0 - l.y : (l.y > by1 ? l.y - by1 : 0.0f);
+                        const float dz = l.z < bz0 ? bz0 - l.z : (l.z > bz1 ? l.z - bz1 : 0.0f);
+                        if (dx * dx + dy * dy + dz * dz <= l.radiusSq)
+                        {
+                            near_ls[nnear++] = &l;
+                        }
+                    }
                 }
             }
         }
-        for (int i = 0; i < count; ++i)
+        if (nnear == 0)
         {
-            v[i].diff = LitColour(v[i + 4], static_cast<u8>(baseColour), v[i].diff, near_ls, nnear);
+            // sem nenhuma luz perto: so o ambiente (igual para os 4 vertices)
+            const u32 a = static_cast<u32>(gAmbient > 255 ? 255 : gAmbient < 0 ? 0 : gAmbient);
+            const u32 amb = a | (a << 8) | (a << 16);
+            for (int i = 0; i < count; ++i)
+            {
+                v[i].diff = (v[i].diff & 0xFF000000) | amb;
+            }
+        }
+        else
+        {
+            const float m = static_cast<u8>(baseColour) * (1.0f / 255.0f);
+            if (gN64Luzes >= 2)
+            {
+            // modo suave (gouraud): soma por canto do mundo, com cache por quadro
+            for (int i = 0; i < count; ++i)
+            {
+                v[i].diff = LitApply(CachedSum(v[i + 4], near_ls, nnear), m, v[i].diff);
+            }
+            }
+            else
+            {
+            // modo padrao: uma soma de luz no centro do quadrilatero, aplicada aos 4 vertices (iluminacao chapada por bloco, estilo PS1)
+            Vert ctr = v[4];
+            for (int i = 1; i < count; ++i)
+            {
+                ctr.x += v[i + 4].x, ctr.y += v[i + 4].y, ctr.z += v[i + 4].z;
+            }
+            const float inv = 1.0f / static_cast<float>(count);
+            ctr.x *= inv, ctr.y *= inv, ctr.z *= inv;
+            const LightSum L = SumLights(ctr, near_ls, nnear);
+            for (int i = 0; i < count; ++i)
+            {
+                v[i].diff = LitApply(L, m, v[i].diff);
+            }
+            }
         }
     }
     const u32 blend = (flags & kAdditive) ? kBlendAdditive : (flags & kAlphaBlend) ? kBlendAlpha : kBlendOpaque;
@@ -505,14 +636,26 @@ void CC gbh_SetWindow(float left, float top, float right, float bottom)
 {
     gWinLeft = left, gWinTop = top, gWinRight = right, gWinBottom = bottom;
 }
+#ifndef N64_AMBIENT_FLOOR
+#define N64_AMBIENT_FLOOR 100 /* 0..255: luz minima (o ambiente do PC e' bem escuro; no N64 a tela fica pequena e a TV escurece mais). 0 = como no PC */
+#endif
 void CC gbh_SetAmbient(float a)
 {
     gAmbient = a * 255.0f;
+#ifdef N64
+    if (gAmbient < static_cast<float>(N64_AMBIENT_FLOOR))
+    {
+        gAmbient = static_cast<float>(N64_AMBIENT_FLOOR);
+    }
+#endif
 }
 void CC gbh_ResetLights()
 {
     gLightCount = 0;
     gActiveCount = 0;
+    gBinUsed = 0;
+    if (++gLEpoch == 0) { memset(gLCache, 0, sizeof(gLCache)); gLEpoch = 1; }
+    memset(gBinHead, 0xFF, sizeof(gBinHead)); // -1 = celula vazia
 }
 s32 CC gbh_AddLight(SLight* l)
 {
@@ -531,9 +674,15 @@ s32 CC gbh_AddLight(SLight* l)
     d.radius = ((l->field_0 >> 8) & 0xFF) * k * 8.0f;
     d.radiusSq = d.radius * d.radius;
     d.invRadius = d.radius > 0 ? 1.0f / d.radius : 0;
+    d.invRadiusSq = d.radiusSq > 0 ? 1.0f / d.radiusSq : 0;
+#ifndef N64_LIGHT_GAIN
+#define N64_LIGHT_GAIN 0.6f /* forca das luzes coloridas (1.0 = PC). A tela do N64 e menor/mais saturada: abaixo de 1 evita o vermelho/neon estourado */
+#endif
+    d.pr = d.r * d.brightness * N64_LIGHT_GAIN, d.pg = d.g * d.brightness * N64_LIGHT_GAIN, d.pb = d.b * d.brightness * N64_LIGHT_GAIN;
     if ((d.flags & 0x30000) == 0x10000)
     {
         gActiveLights[gActiveCount++] = static_cast<u16>(gLightCount);
+        BinInsert(gLightCount);
     }
     return static_cast<s32>(gLightCount++ * 0x2C);
 }

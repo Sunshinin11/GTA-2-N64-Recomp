@@ -2,6 +2,10 @@
 // O ponteiro para este bloco fica em STexture::field_1C_ptr (serve de "id" da textura nos comandos de desenho).
 #pragma once
 #include <stdint.h>
+/* slots do cache de texturas convertidas (4 KB cada); tokens de textura = TEX_TOKEN_BASE + slot. Pico medido: ~135 em uso. */
+#ifndef N64_CACHE_N
+#define N64_CACHE_N 192
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -13,6 +17,7 @@ typedef struct N64Tex
     uint16_t gen;         // sobe a cada (re)preenchimento: invalida a copia convertida
     int16_t slot;         // posicao no cache de texturas convertidas (-1 = nenhuma)
     int16_t palid;        // id da paleta fisica (-1 = nenhuma): o renderer resolve o ponteiro na hora do desenho
+    uint8_t key1;         // 1 = indice 1 da paleta e' transparente (icone de gangue: a tinta lisa cobriria o carro)
 } N64Tex;
 #ifdef __cplusplus
 }

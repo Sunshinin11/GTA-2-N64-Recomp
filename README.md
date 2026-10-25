@@ -75,8 +75,9 @@ The first build takes several minutes.
 
 `fstyle.sty`, `e.gxt`, `s.gxt`, the city maps (`bil`, `ste`, `wil`: `.gmp`, `.sty`, `.scr` and the mission folders), the bonus
 levels, `nyc.gci`, `test1.seq`, `attract/`, `keyboard/`, `frontend/` (menu screens), `audio/` (sound banks) and `gtaudio/` (radio WAVs).
-A missing file only prints a warning during the data step. `p.gxt` (an optional Portuguese text file) is not part of the original game;
-without it the language option simply keeps the current language.
+A missing file only prints a warning during the data step. `p.gxt` (Brazilian Portuguese text) is not part of the original game: if it is
+missing from the data folder, the data step generates it from `e.gxt` + `tools/pt_br.tsv` (`tools/make_pt_gxt.py`), so the language option
+(Options page) can switch between English, Spanish and Portuguese. The game font has no tilde glyphs, so `ã`/`õ` are drawn as `â`/`ô`.
 
 ## Building on Windows (WSL) in one command
 
@@ -100,6 +101,17 @@ Pass them to `build.sh` or `make -f Makefile.recomp`:
 | `RADIO_RATE=12000` | Radio sample rate in Hz (`8000` = smaller) |
 | `N64_INST=/path` | libdragon install location |
 | `OVERSCAN_X=36` `OVERSCAN_Y=28` | Safe-area borders in VI dots (640x480 base) so TVs/upscalers do not crop the picture edges. `0` = full image (emulator) |
+
+Rendering/tuning knobs (pass as `EXTRA_CFLAGS="-DNAME=value ..."`):
+
+| Define | Meaning |
+|---|---|
+| `N64_CAM_ZOOM_PCT=126` | Camera height. Higher = closer to the ground (sees less map, runs faster). 130 was the previous default; every 1% costs about 1.5% frame time |
+| `N64_LUZES=0` | Initial lighting (the Options menu MODE row sets it: PSX = off, PC = on). `0` = off (fastest), `1` = flat light per quad (~5% frame time, blocky), `2` = smooth per-corner light (~9%) |
+| `N64_LIGHT_GAIN=0.6` | Strength of coloured lights (1.0 = PC). Lower avoids blown-out red/neon tints |
+| `N64_AMBIENT_FLOOR=100` | Minimum ambient light (0-255) when lighting is on. `0` = as dark as the PC version |
+| `N64_CACHE_N=192` | Converted-texture cache slots (4 KB each). The measured peak is about 135 |
+| `N64_HEAP_RESERVE_KB=320` | RAM the renderer's speed caches must leave free for the engine (prevents "Out of memory" crashes) |
 
 `bash build.sh clean` removes the build output; `bash setup_engine.sh --force` redoes the engine checkout.
 
