@@ -7,11 +7,22 @@ src="$1"; out="$2"; shift 2
 here="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$out/data"
 # radios: taxa e qualidade. Se mudar (arquivo de marca diferente), TODAS as radios sao reconvertidas.
-RADIO_RATE=12000
-radio_cfg="ulc35-mono-$RADIO_RATE"
+RADIO_RATE="${RADIO_RATE:-12000}"        # 12 kHz; 8000 = ainda menor (ex.: RADIO_RATE=8000 make ...)
+RADIO_QUALITY="${RADIO_QUALITY:-35}"
+radio_cfg="ulc$RADIO_QUALITY-mono-$RADIO_RATE"
 radio_stamp="${out%/}.radio_cfg"
 radio_force=0
 [ "$(cat "$radio_stamp" 2>/dev/null)" = "$radio_cfg" ] || radio_force=1
+# Bancos de efeitos sonoros: UM sfx.raw compartilhado entre os mapas (tools/sfx_share.py), em vez de 6 MB por mapa.
+SFX_MAPS="${SFX_MAPS:-bil ste wil}"
+keep_list="${out%/}.staged_list"; : > "$keep_list"
+if [ -n "$SFX_MAPS" ]; then
+  python3 "$here/sfx_share.py" "$src" "$out/data" $SFX_MAPS || { echo "ERRO: sfx_share.py falhou"; exit 1; }
+  echo "$out/data/audio/sfx.raw" >> "$keep_list"
+  for b in $SFX_MAPS; do
+    [ -f "$out/data/audio/$b.sdt" ] && { echo "$out/data/audio/$b.sdt" >> "$keep_list"; echo "$out/data/audio/$b.raw" >> "$keep_list"; }
+  done
+fi
 for e in "$@"; do
   case "$e" in
     */*) m=$(find "$src" -maxdepth 2 -ipath "$src/$e" | head -1) ;;   # ex.: audio/bil.raw
@@ -22,14 +33,19 @@ for e in "$@"; do
     rel="${f#$src/}"; low=$(echo "$rel" | tr 'A-Z' 'a-z')
     mkdir -p "$out/data/$(dirname "$low")"
     case "$low" in
-      old\ *|*/old\ *) continue ;;
+      old\ *|*/old\ *|.ds_store|*/.ds_store|audio/*.raw|audio/*.sdt) ;;
+      gtaudio/*.wav) echo "$out/data/${low%.wav}.wav64" >> "$keep_list" ;;
+      *) echo "$out/data/$low" >> "$keep_list" ;;
+    esac
+    case "$low" in
+      old\ *|*/old\ *|.ds_store|*/.ds_store) continue ;;
       *.gxt|*.sty|*.gmp|*.tga)
         python3 "$here/le2be.py" "$f" "$out/data/$low" || { echo "ERRO convertendo $f"; exit 1; } ;;
       gtaudio/*.wav)
         dst="$out/data/${low%.wav}.wav64"
         if [ "$radio_force" = 1 ] || [ ! -f "$dst" ] || [ "$f" -nt "$dst" ]; then
           echo "    [RADIO] $low (ULC mono $RADIO_RATE Hz)"
-          "${N64_INST:-/opt/libdragon}/bin/audioconv64" --wav-compress ulc,quality=35 --wav-mono --wav-resample "$RADIO_RATE" \
+          "${N64_INST:-/opt/libdragon}/bin/audioconv64" --wav-compress ulc,quality=$RADIO_QUALITY --wav-mono --wav-resample "$RADIO_RATE" \
             -o "$out/data/gtaudio" "$f" >/dev/null || { echo "ERRO convertendo $f"; exit 1; }
           produced="$out/data/gtaudio/$(basename "${f%.*}").wav64"   # audioconv64 usa o nome original (pode ter maiusculas)
           [ "$produced" != "$dst" ] && [ -f "$produced" ] && mv -f "$produced" "$dst" 2>/dev/null
@@ -38,9 +54,16 @@ for e in "$@"; do
         # scripts de missao: conversao campo a campo (tools/scr_le2be.py + scr_tabela.json)
         python3 "$here/scr_le2be.py" "$f" "$out/data/$low" || { echo "ERRO convertendo $f"; exit 1; } ;;
       audio/*.raw|audio/*.sdt)
+        bn=$(basename "${low%.*}")
+        case " $SFX_MAPS " in *" $bn "*) continue ;; esac     # ja gerado por sfx_share.py
+        echo "$out/data/$low" >> "$keep_list"
         python3 "$here/audio_le2be.py" "$f" "$out/data/$low" || { echo "ERRO convertendo $f"; exit 1; } ;;
       *) cp -u "$f" "$out/data/$low" ;;
     esac
   done < <(find "$m" -type f)
 done
+# poda: remove do DragonFS (pasta de build, regeneravel) o que NAO foi preparado nesta rodada (ex.: frontend/*.tga de builds antigos)
+sort -u "$keep_list" -o "$keep_list"
+find "$out/data" -type f | sort | comm -23 - "$keep_list" | while IFS= read -r f; do rm -f "$f" && echo "    [PODA] ${f#$out/data/}"; done
+find "$out/data" -mindepth 1 -type d -empty -delete 2>/dev/null
 echo "$radio_cfg" > "$radio_stamp"

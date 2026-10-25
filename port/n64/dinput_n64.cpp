@@ -45,8 +45,6 @@ LONG gMouseDX = 0, gMouseDY = 0, gMouseDZ = 0;
 BYTE gMouseButtons[4];
 std::deque<DIDEVICEOBJECTDATA> gMouseEvents;
 DWORD gSequence = 0;
-// Diagnostics, read by the shell: [kbd GetDeviceData calls, events returned, GetDeviceState calls, acquires]
-uint32_t gInputStats[4];
 
 void Push(std::deque<DIDEVICEOBJECTDATA>& q, DWORD ofs, DWORD data)
 {
@@ -108,7 +106,6 @@ class WebDevice final : public IDirectInputDevice2A
     }
     HRESULT Acquire() override
     {
-        gInputStats[3]++;
         mAcquired = true;
         return DI_OK;
     }
@@ -125,7 +122,6 @@ class WebDevice final : public IDirectInputDevice2A
         }
         if (mKind == Kind::Keyboard)
         {
-            gInputStats[2]++;
             BYTE state[256];
             for (int i = 0; i < 256; ++i)
             {
@@ -149,10 +145,6 @@ class WebDevice final : public IDirectInputDevice2A
             return DIERR_NOTACQUIRED;
         }
         std::deque<DIDEVICEOBJECTDATA>& q = mKind == Kind::Keyboard ? gKeyEvents : gMouseEvents;
-        if (mKind == Kind::Keyboard)
-        {
-            gInputStats[0]++;
-        }
         const DWORD want = *inOut;
         DWORD n = 0;
         for (; n < want && n < q.size(); ++n)
@@ -167,10 +159,6 @@ class WebDevice final : public IDirectInputDevice2A
             q.erase(q.begin(), q.begin() + n);
         }
         *inOut = n;
-        if (mKind == Kind::Keyboard && out && !(flags & DIGDD_PEEK))
-        {
-            gInputStats[1] += n;
-        }
         return DI_OK;
     }
     HRESULT SetDataFormat(LPCDIDATAFORMAT) override
@@ -333,6 +321,18 @@ void gta2_port_key(int scancode, int vk, int down, int ch)
     }
 }
 
+// Esvazia a fila de eventos de teclado (GetDeviceData). No menu o jogo le o teclado por estado e a fila enche de Enter/Esc/setas
+// antigos; ao comecar a partida o jogo lia tudo de uma vez (ex.: um B no menu virava ESC = "sair do jogo", e o Enter seguinte confirmava).
+// with_latched != 0 tambem apaga os toques curtos ainda pendentes (so usar dentro do jogo, nunca no menu).
+void gta2_port_flush_key_events(int with_latched)
+{
+    gKeyEvents.clear();
+    if (with_latched)
+    {
+        memset(gLatched, 0, sizeof(gLatched));
+    }
+}
+
 void gta2_port_mouse_move(int dx, int dy)
 {
     gMouseDX += dx;
@@ -354,11 +354,6 @@ void gta2_port_mouse_button(int button, int down)
         gMouseButtons[button] = down ? 0x80 : 0;
         Push(gMouseEvents, 12 + button, gMouseButtons[button]);
     }
-}
-
-const uint32_t* gta2_port_input_stats()
-{
-    return gInputStats;
 }
 
 // Releases every held key, e.g. when the page loses focus.

@@ -1,3 +1,0 @@
-requests
-iced-x86
-pyclip

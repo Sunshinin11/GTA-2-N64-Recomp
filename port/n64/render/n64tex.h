@@ -12,6 +12,7 @@ typedef struct N64Tex
     uint16_t w, h;
     uint16_t gen;         // sobe a cada (re)preenchimento: invalida a copia convertida
     int16_t slot;         // posicao no cache de texturas convertidas (-1 = nenhuma)
+    int16_t palid;        // id da paleta fisica (-1 = nenhuma): o renderer resolve o ponteiro na hora do desenho
 } N64Tex;
 #ifdef __cplusplus
 }

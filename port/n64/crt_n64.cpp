@@ -56,6 +56,11 @@ std::string NormalisePath(const char* path)
     {
         out.erase(0, 2);
     }
+    // O Windows ignora espacos no fim do nome ("data\\frontend\\DemoInfo.tga " na tabela de telas do menu): aqui tambem.
+    while (!out.empty() && out.back() == ' ')
+    {
+        out.pop_back();
+    }
     // The game looks for its music CD as "<drive>:\GTAUDIO\". The music files are
     // installed in data/gtaudio, so drive C stands in for the CD.
     if (out.compare(0, 10, "c:/gtaudio") == 0)
@@ -356,12 +361,7 @@ static FILE* OpenFile(const std::string& norm, const char* mode)
 FILE* gta2_fopen(const char* path, const char* mode)
 {
     const std::string norm = NormalisePath(path);
-    FILE* f = OpenFile(norm, mode);
-    if (!f)
-    {
-        fprintf(stderr, "fopen(\"%s\" -> \"%s\", \"%s\"): %s\n", path, norm.c_str(), mode, strerror(errno));
-    }
-    return f;
+    return OpenFile(norm, mode);
 }
 
 int gta2_fclose(FILE* f)

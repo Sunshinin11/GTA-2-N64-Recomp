@@ -4,7 +4,6 @@
 // One window, one message queue fed by the shell's input events, an in-memory
 // registry (seeded and persisted by the shell), and LoadLibrary/GetProcAddress
 // that hand out the port's renderer (gbh_*) and video (Vid_*) functions.
-extern "C" void gta2_n64_print_mem(const char* tag);
 #include <windows.h>
 #include <dinput.h>
 #include <deque>
@@ -192,9 +191,6 @@ void OutputDebugStringA(LPCSTR s)
 int MessageBoxA(HWND, LPCSTR text, LPCSTR caption, UINT)
 {
     fprintf(stderr, "[MessageBox] %s: %s\n", caption ? caption : "", text ? text : "");
-#ifdef N64
-    gta2_n64_print_mem("no erro");
-#endif
     return IDOK;
 }
 HRESULT CoInitialize(LPVOID)

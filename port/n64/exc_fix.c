@@ -9,7 +9,7 @@
 #include <string.h>
 
 static exception_handler_t gOld;
-static uint32_t gUnaligned, gFpu, gFailed;
+static uint32_t gFailed; /* tentativas de correcao que falharam */
 
 static uint64_t rd_be(uint32_t a, int n)
 {
@@ -134,7 +134,6 @@ static void handler(exception_t *ex)
         if (fix_insn(ex, r, *(volatile uint32_t *)epc, epc))
         {
             r->epc = epc + 4;
-            if (ex->code == 15) gFpu++; else gUnaligned++;
             return;
         }
     }
@@ -147,7 +146,6 @@ static void handler(exception_t *ex)
             if (link) r->gpr[link] = epc + 8;
             r->epc = np;
             r->cr &= ~0x80000000u;
-            if (ex->code == 15) gFpu++; else gUnaligned++;
             return;
         }
     }
@@ -161,10 +159,4 @@ static void handler(exception_t *ex)
 void gta2_install_exception_fixups(void)
 {
     gOld = register_exception_handler(handler);
-}
-
-void gta2_exception_stats(uint32_t *unaligned, uint32_t *fpu)
-{
-    *unaligned = gUnaligned;
-    *fpu = gFpu;
 }

@@ -86,7 +86,7 @@ collide
 debug
 dma_video
 error
-File
+file
 fix16
 gbh_graphics
 gtx_0x106C

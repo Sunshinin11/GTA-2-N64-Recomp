@@ -21,12 +21,10 @@
 extern "C" void gta2_n64_tex_forget(const N64Tex* t);
 extern "C" uint32_t gta2_n64_tex_capture(N64Tex* t, float a_scr, float a_tex, int additive);
 extern "C" int gta2_n64_tex_token_empty(uint32_t token);
-extern "C" uint32_t gta2_n64_transparentes;
-/* MEDICAO TEMPORARIA (fogo): 0 focos 1 criadas 2 falhas_pool 3 sprite_draw 4 gbh_draw 5 rejeitadas 6 textura_vazia 7 enviadas 8 alfa 9 blend 10 zoom 11 sem_textura */
-extern "C" { unsigned int gta2_fogo[12]; int gta2_fogo_tag; float gta2_fogo_pos[3]; }
 #include <libdragon.h>
-extern "C" uint64_t gta2_n64_scene_ticks; /* MEDICAO TEMPORARIA (render_n64.c) */
-static uint32_t g_scene_t0;
+#include <malloc.h>
+#include <stdio.h>
+extern "C" void gta2_frame_blit(int img, int l, int t, int r, int b, int x, int y); /* frame_n64.cpp: comando de blit de imagem (menu) */
 #endif
 
 #include "gbh_graphics.hpp"
@@ -58,11 +56,23 @@ struct Palette
     u32 loaded = 0;
 };
 #ifdef N64
-constexpr int kMaxPalettes = 1024; // N64: so ha centenas de paletas fisicas; 16384 custava 192 KB de RAM
+// N64: a capacidade e' dimensionada em tempo de execucao pelo numero REAL de paletas fisicas da fase
+// (gta2_n64_palettes_reserve, chamada por TextureCache_15D8::LoadPals). Antes era fixa em 1024: uma textura cuja paleta
+// fisica passava de 1024 ficava sem paleta e era desenhada lisa (carro de gangue vermelho sem detalhes).
+int kMaxPalettes = 0;
+Palette* gPalettes = nullptr;
+u16 (*gStub)[4] = nullptr; // [0..1] = id (lido por PaletteIdOf), [2..3] = reservado
+unsigned gPalRejects = 0;
+void PalReject(const char* who, s32 id)
+{
+    (void)who;
+    (void)id;
+    ++gPalRejects;
+}
 #else
 constexpr int kMaxPalettes = 16384;
-#endif
 Palette gPalettes[kMaxPalettes];
+#endif
 
 u16 ToRGB565(u32 rgb)
 {
@@ -149,6 +159,7 @@ void UploadPaletted(STexture* t)
         info->w = t->field_E_width;
         info->h = t->field_10_height;
         info->pal = (palId >= 0 && palId < kMaxPalettes && gPalettes[palId].loaded) ? reinterpret_cast<const uint32_t*>(gPalettes[palId].original) : nullptr;
+        info->palid = static_cast<int16_t>(palId);
         info->gen++;
         return;
     }
@@ -172,7 +183,7 @@ void UploadPaletted(STexture* t)
     t->field_1C_ptr = reinterpret_cast<void*>(id);
 
     gConvert.resize(static_cast<size_t>(w) * h * 4);
-    const DWORD* pal = palId >= 0 && gPalettes[palId].loaded ? gPalettes[palId].original : nullptr;
+    const DWORD* pal = palId >= 0 && palId < kMaxPalettes && gPalettes[palId].loaded ? gPalettes[palId].original : nullptr;
     for (int y = 0; y < h; ++y)
     {
         const u8* row = pix + static_cast<size_t>(y) * kPagePitch;
@@ -240,17 +251,17 @@ struct Light
 };
 Light gLights[256];
 u32 gLightCount = 0;
+// N64: so as luzes que passam no filtro de flags (0x30000 == 0x10000) entram na lista; o resto nunca contribui.
+u16 gActiveLights[256];
+u32 gActiveCount = 0;
 
-u32 LitColour(const Vert& world, u8 multiplier, u32 colour)
+// 'ls' = luzes que alcancam este desenho (ja cortadas por distancia ao quadrilatero): o resultado e' o mesmo de percorrer todas.
+u32 LitColour(const Vert& world, u8 multiplier, u32 colour, const Light* const* ls, u32 nls)
 {
     float lr = 0, lg = 0, lb = 0;
-    for (u32 i = 0; i < gLightCount; ++i)
+    for (u32 i = 0; i < nls; ++i)
     {
-        const Light& l = gLights[i];
-        if ((l.flags & 0x30000) != 0x10000)
-        {
-            continue;
-        }
+        const Light& l = *ls[i];
         const float dx = world.x - l.x, dy = world.y - l.y, dz = world.z - l.z;
         const float d2 = dx * dx + dy * dy + dz * dz;
         if (d2 > l.radiusSq)
@@ -277,10 +288,8 @@ u32 LitColour(const Vert& world, u8 multiplier, u32 colour)
 
 void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
 {
-    if (gta2_fogo_tag) ++gta2_fogo[4];
     if (count < 3 || count > 4 || !tex || v[0].z <= 0.0f)
     {
-        if (gta2_fogo_tag) ++gta2_fogo[5];
         return;
     }
     const float tw = tex->field_E_width, th = tex->field_10_height;
@@ -310,14 +319,42 @@ void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
         }
     }
 #ifndef N64_LUZES
-#define N64_LUZES 0 /* 0 = sem luz dinamica (iluminacao fixa, estilo PS1); 1 = luzes do PC (caro: cada vertice percorre todas as luzes) */
+#define N64_LUZES 0 /* 0 = sem luz dinamica (estilo PS1, padrao). 1 = luzes do PC ligadas (custa 3-13 ms/frame). Para ligar de novo, troque para 1 */
 #endif
     if (N64_LUZES && (flags & kLighting) && gAmbient != 255.0f)
     {
         // The game appends the world-space positions after the screen vertices.
+        // Corte por desenho: caixa dos pontos do mundo do quadrilatero; luz cuja menor distancia a caixa ja passa do raio
+        // nao chega a nenhum vertice (att <= 0), entao sai da lista sem mudar o resultado.
+        const Light* near_ls[48];
+        u32 nnear = 0;
+        {
+            float bx0 = v[4].x, bx1 = v[4].x, by0 = v[4].y, by1 = v[4].y, bz0 = v[4].z, bz1 = v[4].z;
+            for (int i = 1; i < count; ++i)
+            {
+                const Vert& w = v[i + 4];
+                if (w.x < bx0) bx0 = w.x;
+                if (w.x > bx1) bx1 = w.x;
+                if (w.y < by0) by0 = w.y;
+                if (w.y > by1) by1 = w.y;
+                if (w.z < bz0) bz0 = w.z;
+                if (w.z > bz1) bz1 = w.z;
+            }
+            for (u32 k = 0; k < gActiveCount && nnear < 48; ++k)
+            {
+                const Light& l = gLights[gActiveLights[k]];
+                const float dx = l.x < bx0 ? bx0 - l.x : (l.x > bx1 ? l.x - bx1 : 0.0f);
+                const float dy = l.y < by0 ? by0 - l.y : (l.y > by1 ? l.y - by1 : 0.0f);
+                const float dz = l.z < bz0 ? bz0 - l.z : (l.z > bz1 ? l.z - bz1 : 0.0f);
+                if (dx * dx + dy * dy + dz * dz <= l.radiusSq)
+                {
+                    near_ls[nnear++] = &l;
+                }
+            }
+        }
         for (int i = 0; i < count; ++i)
         {
-            v[i].diff = LitColour(v[i + 4], static_cast<u8>(baseColour), v[i].diff);
+            v[i].diff = LitColour(v[i + 4], static_cast<u8>(baseColour), v[i].diff, near_ls, nnear);
         }
     }
     const u32 blend = (flags & kAdditive) ? kBlendAdditive : (flags & kAlphaBlend) ? kBlendAlpha : kBlendOpaque;
@@ -332,20 +369,11 @@ void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
     }
     if (gta2_n64_tex_token_empty(texId)) // textura sem nenhum pixel visivel: nao desenharia nada
     {
-        ++gta2_n64_transparentes;
-        if (gta2_fogo_tag) ++gta2_fogo[6];
         return;
     }
 #else
     const u32 texId = static_cast<u32>(reinterpret_cast<intptr_t>(tex->field_1C_ptr));
 #endif
-    if (gta2_fogo_tag)
-    {
-        ++gta2_fogo[7];
-        gta2_fogo[8] = v[0].diff >> 24;
-        gta2_fogo[9] = blend;
-        gta2_fogo_pos[0] = v[0].x; gta2_fogo_pos[1] = v[0].y; gta2_fogo_pos[2] = v[0].z;
-    }
     static const int kFan[2][3] = {{0, 1, 2}, {0, 2, 3}};
     for (int t = 0; t < count - 2; ++t)
     {
@@ -484,6 +512,7 @@ void CC gbh_SetAmbient(float a)
 void CC gbh_ResetLights()
 {
     gLightCount = 0;
+    gActiveCount = 0;
 }
 s32 CC gbh_AddLight(SLight* l)
 {
@@ -502,20 +531,18 @@ s32 CC gbh_AddLight(SLight* l)
     d.radius = ((l->field_0 >> 8) & 0xFF) * k * 8.0f;
     d.radiusSq = d.radius * d.radius;
     d.invRadius = d.radius > 0 ? 1.0f / d.radius : 0;
+    if ((d.flags & 0x30000) == 0x10000)
+    {
+        gActiveLights[gActiveCount++] = static_cast<u16>(gLightCount);
+    }
     return static_cast<s32>(gLightCount++ * 0x2C);
 }
 
 void CC gbh_BeginScene()
 {
-#ifdef N64
-    g_scene_t0 = timer_ticks(); /* MEDICAO TEMPORARIA: inicio da parte de desenho do motor */
-#endif
 }
 void CC gbh_EndScene()
 {
-#ifdef N64
-    gta2_n64_scene_ticks += (uint32_t)(timer_ticks() - g_scene_t0);
-#endif
 }
 void CC gbh_BeginLevel()
 {
@@ -524,10 +551,57 @@ void CC gbh_EndLevel()
 {
 }
 
+#ifdef N64
+// Ponteiro atual da paleta fisica (nullptr se ainda nao foi registrada). O renderer chama a cada desenho: uma textura
+// criada ANTES da sua paleta ser registrada (ou com a paleta re-registrada depois) ainda acha a paleta certa.
+extern "C" const uint32_t* gta2_n64_palette_ptr(int id)
+{
+    if (id < 0 || id >= kMaxPalettes || !gPalettes || !gPalettes[id].loaded)
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<const uint32_t*>(gPalettes[id].original);
+}
+
+// Chamada antes de registrar as paletas de uma fase. Nunca libera nem move as tabelas antigas (ponteiros ja entregues ao
+// motor continuam validos); so cresce, copiando as entradas.
+extern "C" void gta2_n64_palettes_reserve(int n)
+{
+    if (n > 16384)
+    {
+        n = 16384;
+    }
+    if (n <= kMaxPalettes)
+    {
+        return;
+    }
+    Palette* np = static_cast<Palette*>(calloc(static_cast<size_t>(n), sizeof(Palette)));
+    u16 (*ns)[4] = static_cast<u16 (*)[4]>(calloc(static_cast<size_t>(n), 4 * sizeof(u16)));
+    if (!np || !ns)
+    {
+        free(np);
+        free(ns);
+        return;
+    }
+    if (gPalettes)
+    {
+        memcpy(np, gPalettes, static_cast<size_t>(kMaxPalettes) * sizeof(Palette));
+        memcpy(ns, gStub, static_cast<size_t>(kMaxPalettes) * 4 * sizeof(u16));
+        // as paletas antigas ja apontam para o stub antigo: copiamos tambem os ponteiros, entao o stub antigo continua vivo (nao liberado)
+    }
+    gPalettes = np;
+    gStub = ns;
+    kMaxPalettes = n;
+}
+#endif
+
 u32 CC gbh_RegisterPalette(s32 id, DWORD* data)
 {
     if (id < 0 || id >= kMaxPalettes)
     {
+#ifdef N64
+        PalReject("RegisterPalette", id);
+#endif
         return 0;
     }
     DWORD* p = data;
@@ -551,10 +625,9 @@ u32 CC gbh_RegisterPalette(s32 id, DWORD* data)
 #ifdef N64
     // Sem renderer: nao converte nem aloca 1 KB por paleta; todas apontam para um bloco compartilhado.
     {
-        static u16 sStub[kMaxPalettes][4]; // [0..1] = id (lido por PaletteIdOf), [2..3] = reservado
         const u32 sid = static_cast<u32>(id);
-        memcpy(&sStub[id][0], &sid, 4);
-        pal.data565 = &sStub[id][2];
+        memcpy(&gStub[id][0], &sid, 4);
+        pal.data565 = &gStub[id][2];
         pal.original = data;
         pal.loaded = 1;
         return static_cast<u32>(id);
@@ -593,6 +666,12 @@ STexture* CC gbh_RegisterTexture(s32 width, s32 height, BYTE* data, s32 palId, c
         t->field_12_bPalIsValid = static_cast<u8>(gPalettes[palId].loaded);
         t->field_18_pPaltData = gPalettes[palId].data565;
     }
+#ifdef N64
+    else
+    {
+        PalReject("RegisterTexture", palId);
+    }
+#endif
     UploadPaletted(t);
     return t;
 }
@@ -600,6 +679,9 @@ void CC gbh_AssignPalette(STexture* t, s32 palId)
 {
     if (palId < 0 || palId >= kMaxPalettes)
     {
+#ifdef N64
+        PalReject("AssignPalette", palId);
+#endif
         return;
     }
     t->field_18_pPaltData = gPalettes[palId].data565;
@@ -656,6 +738,135 @@ s32 CC gbh_FreeImageTable()
     gImageCount = 0;
     return 0;
 }
+#ifdef N64
+// N64: as telas do menu (TGA 16 bits, ate 640x480) viram, na hora de carregar, uma copia na METADE da resolucao (media 2x2) em
+// RGBA5551, alinhada em 64 bytes, que o renderer desenha com o RDP (render_n64.c, comando kind 3). Meia resolucao porque a saida e
+// 320x240 (menu em 640x480). O TGA 16 bits e' guardado de baixo para cima e, na ROM, em big-endian (tools/le2be.py).
+// A copia so existe enquanto o menu esta aberto (gbh_FreeImageTable libera).
+static u8* ImageHalf16(const u8* src, int w, int h)
+{
+    const int hw = (w + 1) / 2, hh = (h + 1) / 2;
+    const size_t bytes = (static_cast<size_t>(hw) * hh * 2 + 63) & ~static_cast<size_t>(63);
+    u16* out = static_cast<u16*>(memalign(64, bytes));
+    if (!out)
+    {
+        return nullptr;
+    }
+    for (int y = 0; y < hh; ++y)
+    {
+        const int ya = h - 1 - 2 * y;
+        const int yb = ya > 0 ? ya - 1 : ya;
+        for (int x = 0; x < hw; ++x)
+        {
+            const int xa = 2 * x;
+            const int xb = xa + 1 < w ? xa + 1 : xa;
+            const int ys[2] = {ya, yb};
+            const int xs[2] = {xa, xb};
+            unsigned r = 0, g = 0, b = 0;
+            for (int j = 0; j < 2; ++j)
+            {
+                for (int i = 0; i < 2; ++i)
+                {
+                    const u8* q = src + (static_cast<size_t>(ys[j]) * w + xs[i]) * 2;
+                    const unsigned v = (static_cast<unsigned>(q[0]) << 8) | q[1];
+                    r += (v >> 10) & 31;
+                    g += (v >> 5) & 31;
+                    b += v & 31;
+                }
+            }
+            out[static_cast<size_t>(y) * hw + x] = static_cast<u16>(((r >> 2) << 11) | ((g >> 2) << 6) | ((b >> 2) << 1) | 1);
+        }
+    }
+    data_cache_hit_writeback_invalidate(out, bytes);
+    return reinterpret_cast<u8*>(out);
+}
+// usado por render_n64.c: copia reduzida da imagem 'idx' (largura/altura ja na metade), ou nullptr
+extern "C" const uint16_t* gta2_n64_image_get(int idx, int* w, int* h)
+{
+    if (idx < 0 || static_cast<u32>(idx) >= gImageCount || !gImages[idx].loaded || !gImages[idx].pixels)
+    {
+        return nullptr;
+    }
+    *w = static_cast<int>((gImages[idx].w + 1) / 2);
+    *h = static_cast<int>((gImages[idx].h + 1) / 2);
+    return reinterpret_cast<const uint16_t*>(gImages[idx].pixels);
+}
+#endif
+#ifdef N64
+extern "C" const void* gta2_n64_map_file(const char* path, long offset);
+extern "C" void gta2_n64_rom_copy(void* dst, const void* src, unsigned len);
+// N64: carrega uma tela do menu (TGA 16 bits na ROM, big-endian) DIRETO da ROM, sem o buffer de 600 KB do motor (fopen/malloc/fread/free):
+// le so duas linhas por vez (DMA do PI para um buffer fixo alinhado) e ja grava a copia reduzida na metade (ImageHalf16).
+// Devolve o indice na tabela de imagens (>= 0) ou < 0 em erro.
+extern "C" s32 gta2_n64_image_from_rom(const char* path)
+{
+    const u8* rom = static_cast<const u8*>(gta2_n64_map_file(path, 0));
+    if (!rom)
+    {
+        return -3;
+    }
+    u8 hdr[24] __attribute__((aligned(8)));
+    gta2_n64_rom_copy(hdr, rom, 20);
+    const int idlen = hdr[0];
+    const int w = (hdr[12] << 8) | hdr[13];
+    const int h = (hdr[14] << 8) | hdr[15];
+    if (hdr[1] != 0 || hdr[2] != 2 || hdr[16] != 16 || w <= 0 || h <= 0 || w > 640 || h > 480)
+    {
+        return -2;
+    }
+    for (u32 i = 0; i < gImageCount; ++i)
+    {
+        if (gImages[i].loaded)
+        {
+            continue;
+        }
+        const int hw = (w + 1) / 2, hh = (h + 1) / 2;
+        const size_t bytes = (static_cast<size_t>(hw) * hh * 2 + 63) & ~static_cast<size_t>(63);
+        u16* out = static_cast<u16*>(memalign(64, bytes));
+        if (!out)
+        {
+            return -4;
+        }
+        static u8 rowbuf[2 * 640 * 2 + 32] __attribute__((aligned(16)));
+        const uint32_t pix0 = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(rom) & 0x1FFFFFFFu) + 18u + static_cast<uint32_t>(idlen);
+        for (int y = 0; y < hh; ++y)
+        {
+            const int ya = h - 1 - 2 * y;          // TGA 16 bits: de baixo para cima
+            const int yb = ya > 0 ? ya - 1 : ya;
+            const uint32_t pi = pix0 + static_cast<uint32_t>(yb) * static_cast<uint32_t>(w) * 2u;
+            const unsigned len = static_cast<unsigned>(ya - yb + 1) * static_cast<unsigned>(w) * 2u;
+            u8* base = rowbuf + (pi & 7u);          // mesmo alinhamento (mod 8) da ROM, exigencia do dma_read
+            data_cache_hit_writeback_invalidate(base, len);
+            dma_read(base, pi, len);
+            const u8* rowA[2] = {base + static_cast<size_t>(w) * 2u * (ya - yb), base}; // [0] = linha ya, [1] = linha yb
+            for (int x = 0; x < hw; ++x)
+            {
+                const int xa = 2 * x;
+                const int xb = xa + 1 < w ? xa + 1 : xa;
+                unsigned r = 0, g = 0, b = 0;
+                for (int j = 0; j < 2; ++j)
+                {
+                    const u8* row = rowA[j];
+                    const int xs[2] = {xa, xb};
+                    for (int k = 0; k < 2; ++k)
+                    {
+                        const unsigned v = (static_cast<unsigned>(row[xs[k] * 2]) << 8) | row[xs[k] * 2 + 1];
+                        r += (v >> 10) & 31;
+                        g += (v >> 5) & 31;
+                        b += v & 31;
+                    }
+                }
+                out[static_cast<size_t>(y) * hw + x] = static_cast<u16>(((r >> 2) << 11) | ((g >> 2) << 6) | ((b >> 2) << 1) | 1);
+            }
+        }
+        data_cache_hit_writeback_invalidate(out, bytes);
+        STexture* t = NewTexture(w, h, nullptr);
+        gImages[i] = {TRUE, static_cast<DWORD>(w), static_cast<DWORD>(h), t, reinterpret_cast<u8*>(out)};
+        return static_cast<s32>(i);
+    }
+    return -1;
+}
+#endif
 // SImage is a TGA header followed by the image id and 16-bit pixels.
 s32 CC gbh_LoadImage(SImage* img)
 {
@@ -668,12 +879,14 @@ s32 CC gbh_LoadImage(SImage* img)
         if (!gImages[i].loaded)
         {
             STexture* t = NewTexture(img->field_C_width, img->field_E_height, nullptr);
-            t->field_1C_ptr = reinterpret_cast<void*>(static_cast<intptr_t>(gNextTextureId++));
+#ifndef N64
+            t->field_1C_ptr = reinterpret_cast<void*>(static_cast<intptr_t>(gNextTextureId++)); // N64: field_1C_ptr e' o descritor N64Tex (free no gbh_FreeTexture)
+#endif
             const u8* src = reinterpret_cast<const u8*>(&img->field_12) + img->field_0;
             UploadImage(t, src);
             const size_t bytes = static_cast<size_t>(img->field_C_width) * img->field_E_height * 2;
 #ifdef N64
-            u8* copy = nullptr; // sem renderer: nao guarda 600 KB por imagem
+            u8* copy = ImageHalf16(src, img->field_C_width, img->field_E_height); // copia na metade da resolucao (150 KB no maximo), nao os 600 KB originais
 #else
             u8* copy = static_cast<u8*>(malloc(bytes));
 #endif
@@ -693,6 +906,14 @@ s32 CC gbh_BlitImage(s32 index, s32 left, s32 top, s32 right, s32 bottom, s32 x,
     {
         return -1;
     }
+#ifdef N64
+    if (!gImages[index].pixels)
+    {
+        return -1;
+    }
+    gta2_frame_blit(index, left, top, right, bottom, x, y);
+    return 0;
+#endif
     Vert v[8] = {};
     const float w = static_cast<float>(right - left), h = static_cast<float>(bottom - top);
     const float xs[4] = {0, w, w, 0}, ys[4] = {0, 0, h, h};

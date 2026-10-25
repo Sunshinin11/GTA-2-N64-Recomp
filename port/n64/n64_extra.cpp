@@ -14,12 +14,7 @@ void CC ImGuiDebugDraw()
 // Gancho de apresentacao: o renderer Tiny3D (render_t3d.c) sobrescreve este simbolo fraco.
 extern "C" __attribute__((weak)) void gta2_n64_present(const void* cmds, int cmdCount, const void* verts, int vertCount, int refWidth)
 {
-    (void)cmds; (void)verts; (void)refWidth;
-    static int n;
-    if ((n++ % 60) == 0)
-    {
-        fprintf(stderr, "[present] cmds=%d verts=%d\n", cmdCount, vertCount);
-    }
+    (void)cmds; (void)cmdCount; (void)verts; (void)vertCount; (void)refWidth;
 }
 
 // Lobby DirectPlay: sem rede no N64.

@@ -1,18 +1,39 @@
-*.bak*
-build/
-build_recomp/
-build_probe/
-filesystem/
-filesystem_recomp/
-deps/
-capturas/
-tmp_cmp/
-ares_*.txt
-*.log
-gta2_data/
-
-# ROMs (nao distribuidas no repositorio; compiladas localmente pelo usuario)
+# ---- NADA do jogo / ROM / binarios ----
 *.z64
-*.n64
 *.v64
+*.n64
+*.dfs
+*.elf
+*.bin
+*.o
+*.d
 rom/
+gta2_data/
+data/
+filesystem*/
+filesystem*
+build*/
+*.wav
+*.wav64
+*.gxt
+*.sty
+*.gmp
+*.scr
+*.raw
+*.sdt
+*.tga
+*.bik
+*.gci
+
+# ---- motor baixado pelo setup_engine.sh (upstream + patch) ----
+port/gta2_re/
+port/compat_ci/
+
+# ---- lixo de trabalho ----
+*.bak*
+*.log
+*_log.txt
+ares_*
+capturas/
+tmp*/
+_arquivo_limpeza/

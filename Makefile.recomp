@@ -8,14 +8,28 @@ N64_ROM_SAVETYPE = none
 N64_INST ?= /opt/libdragon
 include $(N64_INST)/include/n64.mk
 N64_CXXFLAGS ?= $(N64_CFLAGS)
-N64_LDFLAGS += --wrap=malloc --wrap=calloc --wrap=realloc
 
 GAME_DATA ?= ../gta2_data/data
 FS_DIR     = filesystem_recomp
+# --- dados do jogo na ROM (DragonFS) ---
+# Menu original do GTA 2: 25 telas TGA (~9,6 MB). INCLUDE_FRONTEND=0 tira as telas (a ROM encolhe, mas o menu nao abre: use
+# Z ao ligar para entrar direto no mapa).
+INCLUDE_FRONTEND ?= 1
+FRONTEND_DIR = $(if $(filter 1,$(INCLUDE_FRONTEND)),frontend,)
+# Mapas (cidades): bil = City 3 (Industrial), ste = City 2 (Residential), wil = City 1 (Downtown). Cada um: .gmp + .sty + .scr + pasta de missoes.
+# Para uma ROM menor, ex.: MAPS="bil".
+MAPS ?= bil ste wil
+MAP_ENTRIES = $(foreach m,$(MAPS),$(m).gmp $(m).sty $(m).scr $(m))
+# Fases bonus de cada cidade (listadas em test1.seq: lorne2 = wil, mike1 = ste, mike2 = bil): .gmp + .scr
+BONUS ?= lorne2e lorne2m lorne2h mike1e mike1m mike1h mike2e mike2m mike2h
+BONUS_ENTRIES = $(foreach b,$(BONUS),$(b).gmp $(b).scr)
+# Radios (musica): todas as estacoes numeradas. A.wav e D.wav (CD-check do jogo) ficam de fora ate se saber onde sao usadas.
+RADIOS ?= 1 2 3 4 5 5a 6 6a 7 7a 8 8a 9 9a 10 10a 11 11a 12 101a
+RADIO_ENTRIES = $(foreach r,$(RADIOS),gtaudio/$(r).wav)
 # Arquivos/pastas de dados para o boot (sem diferenciar maiusculas). Ajuste a lista conforme o motor for pedindo (veja o log "fopen(...)").
-DATA_ENTRIES ?= fstyle.sty e.gxt s.gxt bil.gmp bil.sty bil.scr bil nyc.gci test1.seq attract keyboard frontend audio/bil.raw audio/bil.sdt audio/fstyle.raw audio/fstyle.sdt \
-                gtaudio/1.wav gtaudio/4.wav gtaudio/5.wav gtaudio/10.wav gtaudio/11.wav \
-                gtaudio/5a.wav gtaudio/10a.wav gtaudio/11a.wav gtaudio/101a.wav
+# Bancos de efeitos: tools/stage_data.sh junta bil/ste/wil num unico audio/sfx.raw (variavel SFX_MAPS).
+DATA_ENTRIES ?= fstyle.sty e.gxt s.gxt p.gxt $(MAP_ENTRIES) $(BONUS_ENTRIES) nyc.gci test1.seq attract keyboard $(FRONTEND_DIR) \
+                audio/bil.raw audio/bil.sdt audio/fstyle.raw audio/fstyle.sdt $(RADIO_ENTRIES)
 
 ENGINE := $(shell tr -d '\r' < port/game_srcs.txt)
 ENGINE += registry crt_stubs port_static_init

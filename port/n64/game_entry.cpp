@@ -12,7 +12,8 @@ extern "C" void Gta2Port_StaticInit();
 extern "C" void gta2_port_reg_set_dword(const char* path, const char* name, DWORD value);
 extern "C" void gta2_port_reg_set_string(const char* path, const char* name, const char* value);
 extern "C" void gta2_port_key(int scancode, int vk, int down, int ch);
-extern "C" uint32_t gta2_port_present_count();
+extern "C" int Gta2Port_InFrontend(); // winmain.cpp
+extern "C" int gta2_n64_boot_map; // main_n64.c: -1 = menu, 0..2 = mapa direto
 
 namespace
 {
@@ -37,11 +38,23 @@ void SeedRegistry()
     gta2_port_reg_set_dword("hklm\\software\\freeloader.com\\gta2", "cityinstalled", 2);
     snprintf(path, sizeof(path), "%s\\debug", kRegRoot);
     gta2_port_reg_set_dword(path, "skip_trains", 1); // o port web tambem desliga trens (crash conhecido)
-    // Tech demo N64: pula o menu e entra direto na fase "bil" (o script real e' substituido por um minimo, ver ScriptManager)
-    gta2_port_reg_set_dword(path, "skip_frontend", 1);
-    gta2_port_reg_set_string(path, "mapname", "bil.gmp");
-    gta2_port_reg_set_string(path, "stylename", "bil.sty");
-    gta2_port_reg_set_string(path, "scriptname", "bil.scr");
+    // N64: por padrao abre o menu original do GTA 2 (o motor escolhe o mapa pelo data\\test1.seq: City 1 = wil, 2 = ste, 3 = bil).
+    // Se o jogador segurou Z ao ligar (main_n64.c), pula o menu e entra direto no mapa escolhido.
+    static const char* const kMaps[3] = {"bil", "ste", "wil"};
+    const int boot = gta2_n64_boot_map;
+    const char* m = (boot >= 0 && boot < 3) ? kMaps[boot] : "bil";
+    char name[16];
+    if (boot >= 0 && boot < 3)
+    {
+        // ATENCAO: o motor so testa se a chave "skip_frontend" EXISTE (valor ignorado): para abrir o menu ela nao pode ser criada.
+        gta2_port_reg_set_dword(path, "skip_frontend", 1);
+    }
+    snprintf(name, sizeof(name), "%s.gmp", m);
+    gta2_port_reg_set_string(path, "mapname", name);
+    snprintf(name, sizeof(name), "%s.sty", m);
+    gta2_port_reg_set_string(path, "stylename", name);
+    snprintf(name, sizeof(name), "%s.scr", m);
+    gta2_port_reg_set_string(path, "scriptname", name);
 }
 bool gStarted = false;
 } // namespace
@@ -72,7 +85,9 @@ extern "C" void gta2_game_key(int scancode, int vk, int down)
     gta2_port_key(scancode, vk, down, 0);
 }
 
-extern "C" uint32_t gta2_game_presents(void)
+// 1 = o menu do GTA 2 esta aberto (main_n64.c muda o mapeamento dos botoes entre menu e jogo)
+extern "C" int gta2_game_in_menu(void)
 {
-    return gta2_port_present_count();
+    return gStarted ? Gta2Port_InFrontend() : 0;
 }
+
