@@ -1,4 +1,20 @@
-# GTA 2 for Nintendo 64
+<div align="center">
+
+# GTA 2 — Nintendo 64
+
+**Complete PC-to-N64 port · Port completo da versão PC para N64**
+
+[🇺🇸 English](#english) · [🇧🇷 Português Brasileiro](#português-brasileiro)
+
+**Expansion Pak required / Expansion Pak obrigatório · ~58 MB ROM**
+
+</div>
+
+---
+
+<a id="english"></a>
+
+# GTA 2 for Nintendo 64 — PC Port
 
 A finished port of the PC game **Grand Theft Auto 2** to the **Nintendo 64**, built on the
 [`gta2_re`](https://github.com/CriminalRETeam/gta2_re) decompilation and [libdragon](https://github.com/DragonMinded/libdragon).
@@ -12,11 +28,11 @@ RDP renderer, audio, input and file layer. Tested on a real Nintendo 64 with the
 
 Personal / educational project. Not affiliated with or endorsed by Rockstar Games or Take-Two Interactive.
 
-## Project status: finished
+## Project status and features
 
-This project is **finished**: it is a playable port of GTA 2 for Nintendo 64, **not a tech demo**. The completed build includes the original game content and has been tested on real N64 hardware using the Expansion Pak, as well as in ares. The full ROM is approximately **58 MB**.
+This project is **finished**: it is a playable port of GTA 2 for Nintendo 64, **not a tech demo**. The completed build preserves the PC version's game content, including the **Mad Island** bonus map absent from the PlayStation release, and has been tested on real N64 hardware using the Expansion Pak, as well as in ares. The full ROM is approximately **58 MB**.
 
-The game includes two selectable presentation modes:
+The game includes **English, Spanish and Brazilian Portuguese**, with PT-BR integrated into the game's native GXT text system rather than drawn as a translation overlay. It also includes two selectable presentation modes:
 
 - **PC mode:** extended camera distance and the coloured lighting system inspired by the original PC version.
 - **PSX mode:** reduced visual settings inspired by the PlayStation version, targeting a stable **30 FPS** on real N64 hardware in the developer's tests. This is a performance-oriented option, not a claim that the original PlayStation game ran at a locked 30 FPS.
@@ -139,3 +155,111 @@ Rendering/tuning knobs (pass as `EXTRA_CFLAGS="-DNAME=value ..."`):
 * **CriminalRETeam / `gta2_re`**: the decompilation this port runs on.
 * **M1sterMo / `gta2-browser`**: the browser port whose platform-abstraction approach and compatibility headers this work started from (MIT, see `THIRD_PARTY_NOTICES.md`).
 * **libdragon**: N64 SDK, RDP/RSP/audio libraries.
+
+
+---
+
+<a id="português-brasileiro"></a>
+
+# GTA 2 para Nintendo 64 — Port da versão PC
+
+Port **completo e jogável** de **Grand Theft Auto 2 para PC** no **Nintendo 64**, baseado na reconstrução de código [`gta2_re`](https://github.com/CriminalRETeam/gta2_re) e na [libdragon](https://github.com/DragonMinded/libdragon). Não é um port da versão de PlayStation: o **modo PSX** é uma configuração visual e de desempenho do próprio port de PC.
+
+A lógica do jogo é executada no console com um renderizador próprio para o RDP e camadas adaptadas de áudio, controles e arquivos. **Expansion Pak (8 MB de RAM) obrigatório.** Testado em Nintendo 64 real e no emulador [ares](https://ares-emu.net/).
+
+## Estado do projeto: finalizado
+
+Este é um **port finalizado, não uma demonstração técnica**. A ROM completa tem aproximadamente **58 MB** e preserva o conteúdo da versão PC, incluindo as cidades e o mapa bônus **Mad Island**, ausente na versão PlayStation.
+
+### Recursos e diferenças
+
+| Recurso | Descrição |
+|---|---|
+| **Origem do port** | Versão PC, utilizando a lógica reconstruída pelo `gta2_re` |
+| **Modo PSX** | Configuração visual inspirada nas limitações do PlayStation, voltada ao desempenho; **30 FPS** nos testes do desenvolvedor em N64 real |
+| **Modo PC** | Distância ampliada da câmera e iluminação colorida/dinâmica inspirada no PC; cerca de **23–25 FPS** nos testes do desenvolvedor |
+| **Conteúdo** | Conteúdo da versão PC preservado, incluindo **Mad Island** |
+| **Idiomas** | Inglês, espanhol e **português brasileiro** selecionáveis no menu |
+| **PT-BR nativo** | Tradução integrada ao sistema de textos **GXT** do jogo, não uma camada gráfica sobreposta |
+| **Hardware** | N64 real com Expansion Pak; também testado no ares |
+
+As taxas de quadros são resultados relatados dos testes do desenvolvedor, não uma garantia de desempenho constante em todas as situações. O modo PSX **não** utiliza código da versão PlayStation. O projeto está concluído; não há previsão atual de novos recursos ou suporte. Contribuições por forks são bem-vindas.
+
+## Importante: o jogo não está incluído
+
+O repositório disponibiliza **somente o código do port**. Não contém nem distribui dados comerciais do GTA 2, ROMs, ISOs ou binários do jogo. O script `setup_engine.sh` baixa o `gta2_re` original em uma revisão fixa e aplica as alterações necessárias. **Você precisa fornecer sua própria cópia legalmente obtida dos dados da versão PC.** Não compartilhe a ROM gerada, pois ela contém dados do jogo. O projeto é pessoal e educacional, sem afiliação ou endosso da Rockstar Games ou da Take-Two Interactive.
+
+## Como compilar e executar
+
+1. Instale a **libdragon** (branch preview) com a toolchain MIPS, além de `git`, `patch`, `make` e `python3`. No Windows, utilize **WSL**.
+2. Localize a pasta `data` da sua instalação do GTA 2 para PC, contendo arquivos como `e.gxt`, `fstyle.sty`, `bil.gmp`, `audio/` e `gtaudio/`.
+3. Coloque essa pasta em `../gta2_data/data`, ao lado do repositório, ou informe `GAME_DATA=/caminho/para/data`.
+4. Clone o repositório e execute os comandos:
+
+```bash
+git clone https://github.com/Sunshinin11/GTA-2-N64-Recomp.git
+cd GTA-2-N64-Recomp
+bash setup_engine.sh
+bash build.sh
+```
+
+5. O resultado é `gta2_recomp.z64`. Execute no N64 real com **Expansion Pak** e flashcart compatível, ou no **ares** com Expansion Pak habilitado. Segure **Z** na inicialização para pular o menu e entrar diretamente no mapa.
+
+**Windows / PowerShell com WSL:**
+
+```powershell
+wsl --cd "C:\\path\\to\\GTA-2-N64-Recomp" bash -lc "bash setup_engine.sh && bash build.sh"
+```
+
+O código-fonte original utiliza `#include` com diferenças de maiúsculas e minúsculas. Por isso, o checkout precisa estar em um **sistema de arquivos sem diferenciação de caixa**; no WSL, utilize um caminho em `/mnt/c/...`. A libdragon deve estar em `/opt/libdragon` ou ser informada por `N64_INST=/caminho`.
+
+### Dados usados na compilação
+
+O processo utiliza `fstyle.sty`, `e.gxt`, `s.gxt`, mapas das cidades (`bil`, `ste`, `wil`, incluindo `.gmp`, `.sty`, `.scr` e pastas de missões), níveis bônus, `nyc.gci`, `test1.seq`, `attract/`, `keyboard/`, `frontend/`, `audio/` e `gtaudio/`.
+
+Se `p.gxt` não existir nos dados originais, o processo de compilação o gera a partir de `e.gxt` e `tools/pt_br.tsv`, usando `tools/make_pt_gxt.py`. A seleção de idiomas fica no menu de opções. Como a fonte original não contém alguns caracteres, `ã` e `õ` são exibidos como `â` e `ô`.
+
+### Opções de compilação
+
+| Opção | Função |
+|---|---|
+| `GAME_DATA=/caminho/data` | Pasta dos dados originais |
+| `MAPS="bil ste wil"` | Cidades incluídas |
+| `INCLUDE_FRONTEND=0` | Remove telas do menu para reduzir a ROM |
+| `RADIO_RATE=12000` | Taxa de amostragem das rádios (Hz) |
+| `N64_INST=/caminho` | Instalação da libdragon |
+| `OVERSCAN_X=36 OVERSCAN_Y=28` | Margens seguras para TVs e upscalers |
+
+Ajustes do renderizador podem ser informados por `EXTRA_CFLAGS="-DNOME=valor ..."`:
+
+| Definição | Função |
+|---|---|
+| `N64_CAM_ZOOM_PCT=126` | Altura/distância da câmera; valores maiores mostram menos mapa |
+| `N64_LUZES=0` | Iluminação inicial; menu MODE alterna PSX/PC |
+| `N64_LIGHT_GAIN=0.6` | Intensidade das luzes coloridas |
+| `N64_AMBIENT_FLOOR=100` | Iluminação ambiente mínima |
+| `N64_CACHE_N=192` | Slots do cache de texturas convertidas |
+| `N64_HEAP_RESERVE_KB=320` | Memória reservada para o motor |
+
+Use `bash build.sh clean` para limpar a compilação e `bash setup_engine.sh --force` para refazer o checkout do motor.
+
+## Estrutura do repositório
+
+| Caminho | Conteúdo |
+|---|---|
+| `port/n64/` | Renderizador RDP, áudio, controles, compatibilidade Win32/CRT, sistema de arquivos em RAM e inicialização |
+| `port/compat/` | Cabeçalhos de compatibilidade Win32, DirectX e MSVC |
+| `port/game_srcs.txt` | Fontes do motor incluídas na ROM |
+| `patches/gta2_re_n64.patch` | Alterações sobre o `gta2_re`, revisão `02de8be` |
+| `tools/` | Conversores de dados, textos e áudio |
+| `Makefile.recomp`, `build.sh`, `setup_engine.sh` | Ferramentas de compilação |
+
+`port/gta2_re/` e `port/compat_ci/` são gerados pelo script de preparação e ignorados pelo Git.
+
+## Créditos
+
+- **DMA Design / Rockstar Games:** GTA 2 original.
+- **CriminalRETeam / gta2_re:** reconstrução do código usada no port.
+- **M1sterMo / gta2-browser:** referência inicial de abstração de plataforma e cabeçalhos de compatibilidade (MIT; consulte `THIRD_PARTY_NOTICES.md`).
+- **libdragon:** SDK e bibliotecas de RDP, RSP e áudio para N64.
+
