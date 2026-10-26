@@ -3,7 +3,7 @@
 A finished port of the PC game **Grand Theft Auto 2** to the **Nintendo 64**, built on the
 [`gta2_re`](https://github.com/CriminalRETeam/gta2_re) decompilation and [libdragon](https://github.com/DragonMinded/libdragon).
 The original game logic runs on the console (**Expansion Pak / 8 MB RAM required**) on top of a custom
-RDP renderer, audio, input and file layer. Tested in the [ares](https://ares-emu.net/) emulator.
+RDP renderer, audio, input and file layer. Tested on a real Nintendo 64 with the Expansion Pak and in the [ares](https://ares-emu.net/) emulator.
 
 > **This repository contains only the port's source code.**
 > It contains **no** part of GTA 2: no game data, no ROM, no binaries. It does not redistribute the
@@ -14,9 +14,14 @@ Personal / educational project. Not affiliated with or endorsed by Rockstar Game
 
 ## Project status: finished
 
-This project is **finished**. The port runs as a playable tech demo on real hardware and in ares, and **no further
-development, new features or support are planned**. The repository is kept as-is for reference and learning.
-You are welcome to fork it and take it further.
+This project is **finished**: it is a playable port of GTA 2 for Nintendo 64, **not a tech demo**. The completed build includes the original game content and has been tested on real N64 hardware using the Expansion Pak, as well as in ares. The full ROM is approximately **58 MB**.
+
+The game includes two selectable presentation modes:
+
+- **PC mode:** extended camera distance and the coloured lighting system inspired by the original PC version.
+- **PSX mode:** reduced visual settings inspired by the PlayStation version, targeting a stable **30 FPS** on real N64 hardware in the developer's tests. This is a performance-oriented option, not a claim that the original PlayStation game ran at a locked 30 FPS.
+
+No further development, new features or support are currently planned. The repository remains available for reference and learning; forks are welcome.
 
 ## Important: the game is NOT included
 
@@ -54,7 +59,7 @@ Issues or pull requests asking for game files or ROMs will be closed.
    bash build.sh
    ```
    (Using a different libdragon location? `N64_INST=/path/to/libdragon bash build.sh`)
-6. **Run it** in [ares](https://ares-emu.net/) (or another accurate emulator) with the **Expansion Pak enabled (8 MB)**.
+6. **Run it** on a real Nintendo 64 with an **Expansion Pak (8 MB RAM)** using compatible flashcart hardware, or in [ares](https://ares-emu.net/) (or another accurate emulator) with the Expansion Pak enabled.
    Hold **Z** while the ROM boots to skip the menu and go straight into a map.
 
 If the build says a data file is missing, check that `GAME_DATA` points at the real GTA 2 `data` folder.
