@@ -1,13 +1,14 @@
-diff -ruN a/Source/Ambulance_110.cpp b/Source/Ambulance_110.cpp
---- a/Source/Ambulance_110.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Ambulance_110.cpp	2026-10-25 00:00:18.818148600 +0000
+diff --git a/Source/Ambulance_110.cpp b/Source/Ambulance_110.cpp
+index 2369b4d..af1e163 100644
+--- a/Source/Ambulance_110.cpp
++++ b/Source/Ambulance_110.cpp
 @@ -1,4 +1,5 @@
  #include "Ambulance_110.hpp"
 +#include "n64_population.h"
  #include "ped_jump_over_mode.hpp"
  #include "Char_Pool.hpp"
  #include "Ped.hpp"
-@@ -284,7 +285,7 @@
+@@ -284,7 +285,7 @@ bool Ambulance_20::SpawnParamedicCrew_4FA820()
          return false;
      }
  
@@ -16,10 +17,11 @@ diff -ruN a/Source/Ambulance_110.cpp b/Source/Ambulance_110.cpp
      {
          return false;
      }
-diff -ruN a/Source/BitSet32.hpp b/Source/BitSet32.hpp
---- a/Source/BitSet32.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/BitSet32.hpp	2026-10-20 22:39:38.674181400 +0000
-@@ -11,6 +11,41 @@
+diff --git a/Source/BitSet32.hpp b/Source/BitSet32.hpp
+index 3b50635..527f882 100644
+--- a/Source/BitSet32.hpp
++++ b/Source/BitSet32.hpp
+@@ -11,6 +11,41 @@ EXTERN_GLOBAL(u32, gFlags_67ACF8);
  // Dumb name to avoid conflict with BitField32
  struct CompilerBitField32
  {
@@ -61,7 +63,7 @@ diff -ruN a/Source/BitSet32.hpp b/Source/BitSet32.hpp
      u32 b0 : 1;
      u32 b1 : 1;
      u32 b2 : 1;
-@@ -43,12 +78,24 @@
+@@ -43,12 +78,24 @@ struct CompilerBitField32
      u32 b29 : 1;
      u32 b30 : 1;
      u32 b31 : 1;
@@ -86,7 +88,7 @@ diff -ruN a/Source/BitSet32.hpp b/Source/BitSet32.hpp
      u8 b0 : 1;
      u8 b1 : 1;
      u8 b2 : 1;
-@@ -57,6 +104,7 @@
+@@ -57,6 +104,7 @@ struct CompilerBitField8
      u8 b5 : 1;
      u8 b6 : 1;
      u8 b7 : 1;
@@ -94,44 +96,145 @@ diff -ruN a/Source/BitSet32.hpp b/Source/BitSet32.hpp
  };
  
  class BitSet32
-diff -ruN a/Source/Camera.cpp b/Source/Camera.cpp
---- a/Source/Camera.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Camera.cpp	2026-10-25 02:35:30.875782400 +0000
-@@ -313,7 +313,14 @@
+diff --git a/Source/Camera.cpp b/Source/Camera.cpp
+index 7303340..c130942 100644
+--- a/Source/Camera.cpp
++++ b/Source/Camera.cpp
+@@ -291,6 +291,45 @@ Fix16 Camera_0xBC::ReturnOwnerVelocity_435A20()
+ // FromPolar_41E210 here would drop offset.x's store before its second multiply. The original keeps it, as if
+ // the copy had not been compiled yet (the same effect as Fix16_Point::operator+ in Weapon_30, see
+ // docs/matching_quirks.md).
++#ifdef N64
++// Opcao MODO do menu de Opcoes: 0 = PSX (padrao), 1 = PC.
++//  PSX: camera baixa e quase fixa, na distancia normal (mais perto), sem luzes.
++//  PC : camera que sobe com a velocidade do carro (como no PC), na distancia "longe" (mostra mais mapa), com luzes.
++#ifndef N64_CAM_ZOOM_PCT
++#define N64_CAM_ZOOM_PCT 104 /* modo PC: camera "longe" (cada 1% a menos custa ~1,5% de velocidade; com luzes ligadas e o mais pesado) */
++#endif
++#ifndef N64_CAM_ZOOM_PSX_PCT
++#define N64_CAM_ZOOM_PSX_PCT 126 /* modo PSX: zoom normal (130 = mais rapido, 115 = bem aberto e ~25% mais lento) */
++#endif
++extern "C" void gta2_n64_set_luzes(int v); // gbh_n64.cpp
++#ifndef N64_MODE_DEFAULT
++#define N64_MODE_DEFAULT 0
++#endif
++int gN64Mode = N64_MODE_DEFAULT;
++extern "C" int gta2_n64_get_mode(void)
++{
++    return gN64Mode;
++}
++extern "C" void gta2_n64_set_mode(int v)
++{
++    gN64Mode = v ? 1 : 0;
++    gta2_n64_set_luzes(gN64Mode); // PC = luzes ligadas, PSX = desligadas
++}
++
++// Carros muito rapidos (B-Type...) saiam da tela: o "olhar a frente" do PC e' fixo (240/180 unidades) assim que o carro passa
++// de uma velocidade minima, entao quem corre o dobro ficava alem da borda. Aqui o alcance cresce com a velocidade
++// (N64_CAM_LEAD_REF_X10 = velocidade a partir da qual comeca a crescer, unidade do motor x 16; N64_CAM_LEAD_MAX_PCT = teto, em %).
++#ifndef N64_CAM_FOLLOW_BOOST
++#define N64_CAM_FOLLOW_BOOST 3 /* x limite/aceleracao da mola da camera dentro do carro */
++#endif
++#ifndef N64_CAM_LEAD_REF_X10
++#define N64_CAM_LEAD_REF_X10 35 /* 3,5 (em decimos): carro comum a toda (nyc.gci max_speed x 16 = 3,5..4,5); B-Type = 6,4, GT-A1 = 7,2 */
++#endif
++#ifndef N64_CAM_LEAD_MAX_PCT
++#define N64_CAM_LEAD_MAX_PCT 100 /* 100 = sem aumento: o "olhar a frente" original (180/240 px) ja chega perto da borda; o problema era a mola da camera */
++#endif
++#endif
++
+ MATCH_FUNC(0x436200)
+ void Camera_0xBC::ApplyCarVelocityCameraOffset_436200(Car_BC* pCar, Fix16* pX, Fix16* pY, Fix16* pZ)
+ {
+@@ -313,7 +352,17 @@ void Camera_0xBC::ApplyCarVelocityCameraOffset_436200(Car_BC* pCar, Fix16* pX, F
  
      if (speed > dword_67674C)
      {
 +#ifdef N64
 +#ifndef N64_CAM_SPEED_PCT
-+#define N64_CAM_SPEED_PCT 6 /* % da subida original da camera no carro (100 = PC). Antes 15; 6 = camera quase fixa, baixa como no PS1 */
++#define N64_CAM_SPEED_PCT 6 /* modo PSX: % da subida original da camera no carro (100 = PC); 6 = camera quase fixa e baixa, como no PS1 */
 +#endif
-+        *pZ += speed * N64_CAM_SPEED_PCT / 100;
++#ifndef N64_CAM_SPEED_PC_PCT
++#define N64_CAM_SPEED_PC_PCT 30 /* modo PC: a camera sobe com a velocidade (100% seria igual ao PC, mas o N64 nao aguenta a vista tao aberta) */
++#endif
++        *pZ += speed * (gN64Mode ? N64_CAM_SPEED_PC_PCT : N64_CAM_SPEED_PCT) / 100;
 +#else
          *pZ += speed;
 +#endif
  
          if (!pCar->IsTrainModel_403BA0() && !pCar->IsTank_411900())
          {
-@@ -585,6 +592,18 @@
+@@ -349,6 +398,16 @@ void Camera_0xBC::ApplyCarVelocityCameraOffset_436200(Car_BC* pCar, Fix16* pX, F
+             }
+ 
+             radius = dist * (Fix16(8) - pCar->field_50_car_sprite->field_1C_zpos + *pZ) / field_60.y;
++#ifdef N64
++            {
++                // alcance proporcional a velocidade (suavizado: sem tranco ao acelerar/frear/bater)
++                static s32 sLeadPct = 100;
++                s32 target = (s32)(((__int64)speed.mValue * 100) / ((s32)N64_CAM_LEAD_REF_X10 * 0x4000 / 10));
++                target = target < 100 ? 100 : (target > N64_CAM_LEAD_MAX_PCT ? N64_CAM_LEAD_MAX_PCT : target);
++                sLeadPct += (target - sLeadPct) / 6 + (target > sLeadPct ? 1 : (target < sLeadPct ? -1 : 0));
++                radius = radius * Fix16((sLeadPct * 0x4000) / 100, 0);
++            }
++#endif
+             offset.FromPolar_41E210(radius, angle);
+             *pX += offset.x;
+             *pY += offset.y;
+@@ -501,10 +560,28 @@ void Camera_0xBC::Update_435FF0()
+ {
+     Camera_0xBC::SavePrevCamPos_4357B0();
+     Fix16 v5 = field_98_cam_pos2.field_8_z * dword_676918;
++#ifdef N64
++    // No PC a camera sobe com a velocidade do carro (z += velocidade), e o limite de velocidade da "mola" (v5) e a aceleracao dela crescem junto.
++    // Aqui a camera fica baixa, entao o limite ficava em ~0,19/quadro contra ~0,40 de um B-Type: ela nao alcancava e o carro saia da tela.
++    // Dentro de um carro, limite e aceleracao da mola sobem N64_CAM_FOLLOW_BOOST vezes.
++    Fix16 springAccel = dword_676740;
++    {
++        const bool inCar = field_38_car || (field_34_ped && field_34_ped->get_car_416B60());
++        if (inCar)
++        {
++            v5 = v5 * Fix16(N64_CAM_FOLLOW_BOOST);
++            springAccel = springAccel * Fix16(N64_CAM_FOLLOW_BOOST);
++        }
++    }
++#endif
+ 
+     switch (field_3C_followed_ped_id)
+     {
+         case 1:
++#ifdef N64
++            SmoothApproach_4F7540(field_0_cam_pos_tgt1.field_0_x, field_AC_cam_velocity.field_0_x, field_98_cam_pos2.field_0_x, springAccel, v5);
++            SmoothApproach_4F7540(field_0_cam_pos_tgt1.field_4_y, field_AC_cam_velocity.field_4_y, field_98_cam_pos2.field_4_y, springAccel, v5);
++#else
+             SmoothApproach_4F7540(field_0_cam_pos_tgt1.field_0_x,
+                                   field_AC_cam_velocity.field_0_x,
+                                   field_98_cam_pos2.field_0_x,
+@@ -515,6 +592,7 @@ void Camera_0xBC::Update_435FF0()
+                                   field_98_cam_pos2.field_4_y,
+                                   dword_676740,
+                                   v5);
++#endif
+             SmoothApproachClamped_4F75D0(&field_0_cam_pos_tgt1.field_8_z,
+                                          &field_AC_cam_velocity.field_8_z,
+                                          &field_98_cam_pos2.field_8_z,
+@@ -585,6 +663,15 @@ void Camera_0xBC::SetScreenSize_4361B0(u32 x_pos, u32 y_pos)
  }
  
  
 +#ifdef N64
 +// Camera mais baixa, como no PS1: o zoom padrao (0x38CC) sobe N64_CAM_ZOOM_PCT %. Quanto maior, mais perto do chao (enxerga menos mapa).
 +// 100 = camera do PC. Ajuste aqui: 120 = um pouco mais baixa, 130 = padrao, 150 = bem perto.
-+#ifndef N64_CAM_ZOOM_PCT
-+#define N64_CAM_ZOOM_PCT 130
-+#endif
 +static inline Fix16 N64_CamZoom()
 +{
-+    return Fix16((s32)(0x38CC * N64_CAM_ZOOM_PCT / 100), 0);
++    return Fix16((s32)(0x38CC * (gN64Mode ? N64_CAM_ZOOM_PCT : N64_CAM_ZOOM_PSX_PCT) / 100), 0);
 +}
 +#endif
 +
  MATCH_FUNC(0x4364A0)
  void Camera_0xBC::UpdateFollowCarCamera_4364A0(Car_BC* pCar)
  {
-@@ -601,6 +620,9 @@
+@@ -601,6 +688,9 @@ void Camera_0xBC::UpdateFollowCarCamera_4364A0(Car_BC* pCar)
          Fix16 new_z;
          new_z = Max_41E130(pCar->get_z_41E450() - kTwo_676820, kOne_67681C);
          Fix16 zoom = kDefaultZoom_6766D4;
@@ -141,7 +244,7 @@ diff -ruN a/Source/Camera.cpp b/Source/Camera.cpp
  
          AccumulateSuspicionOnDriver_435F90(pCar);
          ApplyCarVelocityCameraOffset_436200(pCar, &new_x, &new_y, &new_z);
-@@ -647,6 +669,9 @@
+@@ -647,6 +737,9 @@ void Camera_0xBC::UpdateFollowPedCamera_436540(Ped* pPed)
          if (pPed->GetPedState_403990() != ped_state_1::dead_9)
          {
              zoom = kDefaultZoom_6766D4;
@@ -151,10 +254,11 @@ diff -ruN a/Source/Camera.cpp b/Source/Camera.cpp
          }
          Camera_0xBC::ApplyZOffsetToScreenPosition_436860(pPed, xpos, ypos, zposToUse);
          SetCamera_41E3D0(xpos, ypos, zposToUse, zoom);
-diff -ruN a/Source/CarInfo_808.cpp b/Source/CarInfo_808.cpp
---- a/Source/CarInfo_808.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/CarInfo_808.cpp	2026-10-20 21:11:47.255312700 +0000
-@@ -374,6 +374,13 @@
+diff --git a/Source/CarInfo_808.cpp b/Source/CarInfo_808.cpp
+index 1502a0c..40f9e00 100644
+--- a/Source/CarInfo_808.cpp
++++ b/Source/CarInfo_808.cpp
+@@ -374,6 +374,13 @@ s32 __stdcall CarInfo_808::PushData_430E60(void* pSrc, u32 size)
          return -12;
      }
  
@@ -168,7 +272,7 @@ diff -ruN a/Source/CarInfo_808.cpp b/Source/CarInfo_808.cpp
      memcpy(modelPhyArrPtr_675F98, pSrc, size);
  
      modelPhyArrPtr_675F98 = modelPhyArrPtr_675F98 + size;
-@@ -625,7 +632,7 @@
+@@ -625,7 +632,7 @@ void CarInfo_808::LoadModelPhysics_4546D0()
  {
      u32 number_of_cars = gGtx_0x106C_703DD4->get_number_of_cars();
      u32 local_1c;
@@ -177,9 +281,10 @@ diff -ruN a/Source/CarInfo_808.cpp b/Source/CarInfo_808.cpp
      void* file_content = File::ReadFileToBuffer_4A6C80(file_name_677EC4, &file_size);
  
      field_804_raw_data = new ModelPhysics_48[number_of_cars];
-diff -ruN a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
---- a/Source/CarPhysics_B0.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/CarPhysics_B0.cpp	2026-10-21 06:42:40.000000000 +0000
+diff --git a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
+index 618e08b..5dbd93e 100644
+--- a/Source/CarPhysics_B0.cpp
++++ b/Source/CarPhysics_B0.cpp
 @@ -21,7 +21,7 @@
  
  // Forward declarations: the functions below are in address order
@@ -189,7 +294,7 @@ diff -ruN a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
  static inline Fix16 __stdcall Square_49E0E0(const Fix16& value);
  EXPORT Fix16 __stdcall DotProduct_560680(const Fix16_Point& Vector1, const Fix16_Point& Vector2);
  
-@@ -2228,10 +2228,10 @@
+@@ -2228,10 +2228,10 @@ char_type CarPhysics_B0::CheckPendingCollision_55F360()
  MATCH_FUNC(0x55F3B0)
  EXPORT Fix16_Point __stdcall ComputeLineLineIntersection_55F3B0(Fix16 OwnerMass,
                                                                  Fix16 TargetMass,
@@ -202,7 +307,7 @@ diff -ruN a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
                                                                  Fix16_Point& a8,
                                                                  Fix16 OwnerMomOfInertia,
                                                                  Fix16 TargetMomOfInertia,
-@@ -2310,7 +2310,7 @@
+@@ -2310,7 +2310,7 @@ void CarPhysics_B0::ApplyForceAndIntegrate_55F7A0(Fix16_Point* a2, Fix16_Point a
  // GetLength_41E260 as inlined into ApplyImpactForcesAndDamage_55FA60: both Abs are called out of line
  // (Abs_436A50) although the first multiply is inlined, which the plain inline can't give (Abs and operator*
  // have the same front-end size, 57).
@@ -211,7 +316,7 @@ diff -ruN a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
  {
      if (p.x == FIX16_POINT_ZERO)
      {
-@@ -2372,7 +2372,7 @@
+@@ -2372,7 +2372,7 @@ void CarPhysics_B0::ApplyAngularImpulse_55F970(Fix16 a2)
  }
  
  MATCH_FUNC(0x55f9a0)
@@ -220,7 +325,7 @@ diff -ruN a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
  {
      field_48_force_accum += pForce.Multiply_438FE0(CarPhysics_B0::CalculateMass_559FF0());
  }
-@@ -2396,7 +2396,7 @@
+@@ -2396,7 +2396,7 @@ void CarPhysics_B0::ApplyImpulseWithTrailerRedirect_55FA10(Fix16_Point* a2)
  
  // https://decomp.me/scratch/TSKLx
  MATCH_FUNC(0x55fa60)
@@ -229,7 +334,7 @@ diff -ruN a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
  {
      Fix16_Point NewImpulse;
      Fix16 ImpulseIntensity = GetLength_AbsOutOfLine_41E260(Impulse);
-@@ -2439,7 +2439,7 @@
+@@ -2439,7 +2439,7 @@ static inline Fix16 __stdcall DotProductInlined_49E500(Fix16_Point& Vector1, Fix
  }
  
  // DotProductInlined_49E500 with the out-of-line Fix16 operator copies
@@ -238,7 +343,7 @@ diff -ruN a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
  {
      return Vector1.x.Multiply_408680(Vector2.x).Add_408660(Vector1.y.Multiply_408680(Vector2.y));
  }
-@@ -2451,7 +2451,7 @@
+@@ -2451,7 +2451,7 @@ static inline Fix16 __stdcall Square_49E0E0(const Fix16& value)
  }
  
  MATCH_FUNC(0x55fc30)
@@ -247,10 +352,11 @@ diff -ruN a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
  {
  
      Fix16_Point a2;
-diff -ruN a/Source/CarPhysics_B0.hpp b/Source/CarPhysics_B0.hpp
---- a/Source/CarPhysics_B0.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/CarPhysics_B0.hpp	2026-10-20 18:36:35.959668700 +0000
-@@ -29,10 +29,10 @@
+diff --git a/Source/CarPhysics_B0.hpp b/Source/CarPhysics_B0.hpp
+index 42105c9..4934307 100644
+--- a/Source/CarPhysics_B0.hpp
++++ b/Source/CarPhysics_B0.hpp
+@@ -29,10 +29,10 @@ EXTERN_GLOBAL(Fix16_Point, CollisionIntersectionPoint_6FE1A0);
  
  EXPORT Fix16_Point __stdcall ComputeLineLineIntersection_55F3B0(Fix16 OwnerMass,
                                                                  Fix16 TargetMass,
@@ -263,7 +369,7 @@ diff -ruN a/Source/CarPhysics_B0.hpp b/Source/CarPhysics_B0.hpp
                                                                  Fix16_Point& a8,
                                                                  Fix16 OwnerMomOfInertia,
                                                                  Fix16 TargetMomOfInertia,
-@@ -200,10 +200,10 @@
+@@ -200,10 +200,10 @@ class CarPhysics_B0
      EXPORT void ApplyForceAtPoint_55F800(Fix16_Point* a2, Fix16_Point* a3, s32 a4);
      EXPORT void AccumulateImpulse_55F930(Fix16_Point* a2);
      EXPORT void ApplyAngularImpulse_55F970(Fix16 a2);
@@ -277,15 +383,16 @@ diff -ruN a/Source/CarPhysics_B0.hpp b/Source/CarPhysics_B0.hpp
      EXPORT void HandleWorldCollision_55FD00(Fix16_Point& pHitPoint);
      EXPORT void HandleCarCollision_55FF20(Car_BC* pOtherCar);
      EXPORT void HandleObjectCollision_5606C0(Object_2C* a2, char_type a3);
-diff -ruN a/Source/Car_BC.cpp b/Source/Car_BC.cpp
---- a/Source/Car_BC.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Car_BC.cpp	2026-10-20 22:46:33.380209700 +0000
+diff --git a/Source/Car_BC.cpp b/Source/Car_BC.cpp
+index 7b7ae3e..ab88355 100644
+--- a/Source/Car_BC.cpp
++++ b/Source/Car_BC.cpp
 @@ -1,3 +1,4 @@
 +#include "n64_population.h"
  #include "Car_BC.hpp"
  #include "explosion_type.hpp"
  #include "ped_death_cause.hpp"
-@@ -589,8 +590,9 @@
+@@ -589,8 +590,9 @@ u32 Car_6C::SelectTrafficCarModel_444AB0(Player* pPlayer, gmp_zone_info* pZoneIn
              v8 = 99;
          }
  
@@ -297,7 +404,7 @@ diff -ruN a/Source/Car_BC.cpp b/Source/Car_BC.cpp
          {
              *pOut = 0;
              return car_model_enum::none;
-@@ -5670,7 +5672,7 @@
+@@ -5670,7 +5672,7 @@ Ang16 Car_BC::GetRadioTowerAngle_442520()
  EXTERN_GLOBAL(Fix16, kFPZero_6691B0);
  DEFINE_GLOBAL_INIT(Fix16, kAngFix16FullCircle_66A8E4, Fix16(0x18F60, 0), 0x66A8E4);
  DEFINE_GLOBAL_INIT(Fix16, kAngFix16HalfCircle_6691EC, Fix16(0xC7B0, 0), 0x6691EC);
@@ -306,7 +413,7 @@ diff -ruN a/Source/Car_BC.cpp b/Source/Car_BC.cpp
  {
      Fix16 result = unk;
      for (; result < kFPZero_6691B0; result += kAngFix16FullCircle_66A8E4)
-@@ -5688,7 +5690,7 @@
+@@ -5688,7 +5690,7 @@ inline Fix16 __stdcall WrapAngle_40E790(Fix16& unk) // 9.6f inlined func
  // TODO: Move
  // https://decomp.me/scratch/GnD4O
  MATCH_FUNC(0x405CE0)
@@ -315,15 +422,16 @@ diff -ruN a/Source/Car_BC.cpp b/Source/Car_BC.cpp
  {
      if (a1 - a3 > kAngFix16HalfCircle_6691EC)
      {
-diff -ruN a/Source/Char_Pool.cpp b/Source/Char_Pool.cpp
---- a/Source/Char_Pool.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Char_Pool.cpp	2026-10-25 00:08:52.586408100 +0000
+diff --git a/Source/Char_Pool.cpp b/Source/Char_Pool.cpp
+index cffe1fc..d538960 100644
+--- a/Source/Char_Pool.cpp
++++ b/Source/Char_Pool.cpp
 @@ -1,3 +1,4 @@
 +#include "n64_population.h"
  #include "Char_Pool.hpp"
  #include "ped_class.hpp"
  #include "ped_fire_mode.hpp"
-@@ -563,7 +564,7 @@
+@@ -563,7 +564,7 @@ void PedManager::SpawnDummies_46EB60(Camera_0xBC* pCam)
              ypos < kFp255_678414 - kFpOne_678664)
          {
              gmp_zone_info* pZoneInfo = gMap_0x370_6F6268->get_nav_zone_unknown_4DF890(xpos.ToInt(), ypos.ToInt());
@@ -332,7 +440,7 @@ diff -ruN a/Source/Char_Pool.cpp b/Source/Char_Pool.cpp
              {
                  if (gMap_0x370_6F6268->FindPavementBlockForCoord_4E4BB0(xpos.ToInt(), ypos.ToInt(), zpos))
                  {
-@@ -721,7 +722,7 @@
+@@ -721,7 +722,7 @@ PedManager::PedManager()
      field_3_num_peds_updated = 0;
      field_4_num_script_created_peds = 0;
      field_6_num_peds_on_screen = 0;
@@ -341,9 +449,10 @@ diff -ruN a/Source/Char_Pool.cpp b/Source/Char_Pool.cpp
      field_7_make_all_muggers = false;
  
      gPedId_61A89C = 7;
-diff -ruN a/Source/Cranes.cpp b/Source/Cranes.cpp
---- a/Source/Cranes.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Cranes.cpp	2026-10-20 18:36:36.439473600 +0000
+diff --git a/Source/Cranes.cpp b/Source/Cranes.cpp
+index a7a003c..7116b36 100644
+--- a/Source/Cranes.cpp
++++ b/Source/Cranes.cpp
 @@ -14,7 +14,7 @@
  #include "sprite.hpp"
  
@@ -353,7 +462,7 @@ diff -ruN a/Source/Cranes.cpp b/Source/Cranes.cpp
  EXPORT void __stdcall SmoothApproach_4F7540(Fix16& Coord_1, Fix16& Velocity_1, Fix16& Coord_2, Fix16& Velocity_2, Fix16& Velocity_3);
  
  DEFINE_GLOBAL_INIT(Fix16, kHomeHookRadius_679E58, Fix16(0x2000, 0), 0x679E58);
-@@ -509,7 +509,7 @@
+@@ -509,7 +509,7 @@ void Crane_15C::UpdateCraneTargets_47F4C0()
  
  // 9.6f 0x448900
  MATCH_FUNC(0x47f6c0)
@@ -362,10 +471,11 @@ diff -ruN a/Source/Cranes.cpp b/Source/Cranes.cpp
  {
      Fix16_Point v10 = (pPoint.Sub_40AC80(field_2C_rotor_obj->field_4->get_x_y()));
      *pOutF16 = v10.GetLength_41E260();
-diff -ruN a/Source/Cranes.hpp b/Source/Cranes.hpp
---- a/Source/Cranes.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Cranes.hpp	2026-10-20 18:36:40.093150700 +0000
-@@ -43,7 +43,7 @@
+diff --git a/Source/Cranes.hpp b/Source/Cranes.hpp
+index a01327a..7e31a09 100644
+--- a/Source/Cranes.hpp
++++ b/Source/Cranes.hpp
+@@ -43,7 +43,7 @@ class Crane_15C
      EXPORT bool IsPickupCarTargetValid_47F3D0();
      EXPORT bool IsDropTransporterTargetValid_47F450();
      EXPORT void UpdateCraneTargets_47F4C0();
@@ -374,9 +484,10 @@ diff -ruN a/Source/Cranes.hpp b/Source/Cranes.hpp
      EXPORT void TargetTransporter_47F7F0(Car_BC* a2);
      EXPORT void PickUpCar_47F930(Car_BC* a2);
      EXPORT void TryNextDropPosition_47FB40();
-diff -ruN a/Source/Draw.cpp b/Source/Draw.cpp
---- a/Source/Draw.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Draw.cpp	2026-10-24 22:31:32.174067300 +0000
+diff --git a/Source/Draw.cpp b/Source/Draw.cpp
+index 22f9a5d..13a9d74 100644
+--- a/Source/Draw.cpp
++++ b/Source/Draw.cpp
 @@ -8,6 +8,75 @@
  #include "KanjiFont_8EC.hpp"
  #include "TextureCache_15D8.hpp"
@@ -453,7 +564,7 @@ diff -ruN a/Source/Draw.cpp b/Source/Draw.cpp
  DEFINE_GLOBAL_INIT(Fix16, kFpOne_706A6C, Fix16(1), 0x706A6C);
  DEFINE_GLOBAL_INIT(Ang16, kAngZero_706C3C, Ang16(0), 0x706C3C);
  DEFINE_GLOBAL(QuadVerts, gQuadVerts_706B88, 0x706B88);
-@@ -364,6 +433,42 @@
+@@ -364,6 +433,42 @@ void __stdcall DrawText_5D8A10(const wchar_t* pText,
                                 s32 alpha_value,
                                 u8 flags)
  {
@@ -496,7 +607,7 @@ diff -ruN a/Source/Draw.cpp b/Source/Draw.cpp
      s32 new_Flags = CalcQuadFlags_5D83E0(alpha_value, flags) | 0x20000;
  
      // The original walks a copy of pText (it reuses pText's stack slot as a float temp)
-@@ -504,4 +609,10 @@
+@@ -504,4 +609,10 @@ void __stdcall DrawText_5D8A10(const wchar_t* pText,
          }
          pIter++;
      }
@@ -507,10 +618,11 @@ diff -ruN a/Source/Draw.cpp b/Source/Draw.cpp
 +    }
 +#endif
  }
-diff -ruN a/Source/Explosion_30.cpp b/Source/Explosion_30.cpp
---- a/Source/Explosion_30.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Explosion_30.cpp	2026-10-25 03:49:08.493777190 +0000
-@@ -964,6 +964,21 @@
+diff --git a/Source/Explosion_30.cpp b/Source/Explosion_30.cpp
+index d3c6944..2ad2277 100644
+--- a/Source/Explosion_30.cpp
++++ b/Source/Explosion_30.cpp
+@@ -964,6 +964,21 @@ char_type Explosion_30::Update_5434A0(Fix16 speed, Ang16 ang)
          return 1;
      }
  
@@ -532,7 +644,7 @@ diff -ruN a/Source/Explosion_30.cpp b/Source/Explosion_30.cpp
      switch (this->field_10_type)
      {
          case explosion_type::fire_3:
-@@ -1186,6 +1201,9 @@
+@@ -1186,6 +1201,9 @@ s32 ExplosionPool_7A8::FreeLowestPriority_543690()
          cur_idx = ++idx;
      } while (idx < GTA2_COUNTOF(field_0_explosions));
      this->field_0_explosions[lowest_idx].field_1A_timer = 0;
@@ -542,10 +654,11 @@ diff -ruN a/Source/Explosion_30.cpp b/Source/Explosion_30.cpp
  }
  #pragma warning(pop)
  
-diff -ruN a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
---- a/Source/Fix16_Point.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Fix16_Point.cpp	2026-10-21 06:42:40.000000000 +0000
-@@ -10,7 +10,7 @@
+diff --git a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
+index 41da2e5..99ae237 100644
+--- a/Source/Fix16_Point.cpp
++++ b/Source/Fix16_Point.cpp
+@@ -10,7 +10,7 @@ Fix16_Point Fix16_Point::Add_40AC50(const Fix16_Point& in)
  
  // The out-of-line copy of the inline operator-
  MATCH_FUNC(0x40AC80)
@@ -554,7 +667,7 @@ diff -ruN a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
  {
      return Fix16_Point(x - rhs.x, y - rhs.y);
  }
-@@ -29,7 +29,7 @@
+@@ -29,7 +29,7 @@ Ang16 Fix16_Point::atan2_40ACD0()
  
  // https://decomp.me/scratch/qQwG3
  MATCH_FUNC(0x438FE0)
@@ -563,7 +676,7 @@ diff -ruN a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
  {
      return Fix16_Point(x * in, y * in);
  }
-@@ -50,7 +50,7 @@
+@@ -50,7 +50,7 @@ Fix16_Point Fix16_Point::NormalizeSafe_442AD0()
      }
  }
  
@@ -572,7 +685,7 @@ diff -ruN a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
  {
      return Fix16_Point(x / in, y / in);
  }
-@@ -63,7 +63,7 @@
+@@ -63,7 +63,7 @@ Fix16_Point Fix16_Point::MultBy_442C80(const s32& factor)
  
  // https://decomp.me/scratch/nFSYS
  MATCH_FUNC(0x442CB0)
@@ -581,7 +694,7 @@ diff -ruN a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
  {
      return Fix16_Point(x / in, y / in);
  }
-@@ -86,7 +86,7 @@
+@@ -86,7 +86,7 @@ Fix16 Fix16_Point::GetLength_453590()
  }
  
  MATCH_FUNC(0x55F9E0)
@@ -590,10 +703,11 @@ diff -ruN a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
  {
      return Fix16_Point(x / a3, y / a3);
  }
-diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
---- a/Source/Fix16_Point.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Fix16_Point.hpp	2026-10-20 18:36:38.092731200 +0000
-@@ -44,13 +44,13 @@
+diff --git a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
+index c010fb9..2543888 100644
+--- a/Source/Fix16_Point.hpp
++++ b/Source/Fix16_Point.hpp
+@@ -44,13 +44,13 @@ struct Fix16_Point_POD
          y = a2;
      }
  
@@ -609,7 +723,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
      {
          x = Ang16::sine_40F500(angle) * radius;
          y = Ang16::cosine_40F520(angle) * radius;
-@@ -68,7 +68,7 @@
+@@ -68,7 +68,7 @@ struct Fix16_Point_POD
          y = ((-x_old) * sin) + (y * cos);
      }
  
@@ -618,7 +732,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
  
      // Same layout: a POD passed where a Fix16_Point is expected (a free inline site, like the other way)
      operator Fix16_Point&()
-@@ -83,7 +83,7 @@
+@@ -83,7 +83,7 @@ struct Fix16_Point_POD
  class Fix16_Point
  {
    public:
@@ -627,7 +741,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
      {
          this->x = a2;
          this->y = a3;
-@@ -118,7 +118,7 @@
+@@ -118,7 +118,7 @@ class Fix16_Point
      }
  
      // But also 0x40ACD0 non inlined in 10.5
@@ -636,7 +750,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
      {
          return Fix16::atan2_fixed_405320(y, x);
      }
-@@ -128,7 +128,7 @@
+@@ -128,7 +128,7 @@ class Fix16_Point
      // 9.6f 0x41E260; the out-of-line copy is GetLength_453590. The nested if/else (front-end size 162, the
      // else-if chain is 160) gives the original's cut-offs in Crane_15C::ComputeHookPolar_47F6C0 with
      // SquareRoot at 48; matched functions allow 159..162.
@@ -645,7 +759,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
      {
          if (x == FIX16_POINT_ZERO)
          {
-@@ -166,7 +166,7 @@
+@@ -166,7 +166,7 @@ class Fix16_Point
          }
      }
  
@@ -654,7 +768,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
      {
          x = Ang16::sine_40F500(angle) * radius;
          y = Ang16::cosine_40F520(angle) * radius;
-@@ -253,7 +253,7 @@
+@@ -253,7 +253,7 @@ class Fix16_Point
      }
  
  
@@ -663,7 +777,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
      {
          x += other.x;
          y += other.y;
-@@ -279,8 +279,8 @@
+@@ -279,8 +279,8 @@ class Fix16_Point
      // Out-of-line copy of RotateByAngle_40F6B0, emitted in CarPhysics_B0.cpp
      EXPORT void RotateVelocity_562C20(const Ang16& angle);
  
@@ -674,7 +788,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
  
      // Divide_442CB0 as a nothrow inline (see DivideInl_55F9E0; CarPhysics_B0::HandleObjectCollision_5606C0,
      // Car_BC::ApplyExplosionImpulse_443710)
-@@ -374,13 +374,13 @@
+@@ -374,13 +374,13 @@ class Fix16_Point
      }
  
      // MATCH_FUNC(0x40AC50)
@@ -690,7 +804,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
      {
          return Fix16_Point(x - rhs.x, y - rhs.y);
      }
-@@ -388,7 +388,7 @@
+@@ -388,7 +388,7 @@ class Fix16_Point
      // The out-of-line copy of the inline operator-. Called by name where the original keeps an EH state
      // for temporaries around the call (Crane_15C::HookPickupCar_47EF80, ComputeHookPolar_47F6C0); the
      // inline operator- called out of line gets none (CarPhysics_B0::HandleCarCollision_55FF20)
@@ -699,7 +813,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
  
      // operator+/operator- with their bodies defined at the end of Car_BC.cpp (HandleCarHitByObject_43F130)
      inline Fix16_Point AddLate_40AC50(const Fix16_Point& in);
-@@ -513,7 +513,7 @@
+@@ -513,7 +513,7 @@ class Fix16_Point
          }
      }
  
@@ -708,7 +822,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
      {
          return Fix16_Point(x * in, y * in);
      }
-@@ -526,7 +526,7 @@
+@@ -526,7 +526,7 @@ class Fix16_Point
      EXPORT Fix16_Point MultBy_442C80(const s32& factor);
  
      // 10.0 0x442CB0
@@ -717,7 +831,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
  
      // Unused (ApplyExplosionImpulse_443710 calls GetLength_41E260 now), kept for the same reason as
      // GetLength_no_sqrt_inline
-@@ -618,7 +618,7 @@
+@@ -618,7 +618,7 @@ class Fix16_Point
          y = 0;
      }
  
@@ -726,7 +840,7 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
  
      // operator/ 0x55F9E0 as a nothrow inline that VC6 still calls out of line: the original sets no EH
      // state for the temporaries that live across this call (CarPhysics_B0::HandleCarCollision_55FF20,
-@@ -638,7 +638,7 @@
+@@ -638,7 +638,7 @@ class Fix16_Point
      Fix16 y;
  };
  
@@ -735,10 +849,11 @@ diff -ruN a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
  {
      x += other.x;
      y += other.y;
-diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
---- a/Source/Frontend.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Frontend.cpp	2026-10-25 03:59:37.475793368 +0000
-@@ -37,6 +37,65 @@
+diff --git a/Source/Frontend.cpp b/Source/Frontend.cpp
+index d795ddf..a2acade 100644
+--- a/Source/Frontend.cpp
++++ b/Source/Frontend.cpp
+@@ -37,6 +37,100 @@
  #pragma comment(lib, "dxguid.lib")
  
  void Start_GTA2Manager_5E4DE0();
@@ -746,7 +861,15 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
 +// N64: pagina de Opcoes propria (MENUPAGE_15): volume da musica (0) e dos efeitos (1); audio_n64.c
 +extern "C" int gta2_n64_get_volume(int which);
 +extern "C" void gta2_n64_set_volume(int which, int v);
++extern "C" int gta2_n64_get_mode(void); // Camera.cpp: 0 = PSX (camera longe/travada, sem luzes), 1 = PC (camera livre, com luzes)
++extern "C" void gta2_n64_set_mode(int v);
 +extern char gN64Language; // text_0x14.cpp
++
++// linhas da pagina de Opcoes: 0 musica, 1 efeitos, 2 idioma, 3 modo (PSX/PC); 4 = VOLTAR
++enum
++{
++    N64_OPT_ROWS = 4
++};
 +
 +// idiomas da pagina de Opcoes: 0 = ingles (e), 1 = espanhol (s), 2 = portugues (p)
 +static inline int N64_LangIdx(char c)
@@ -757,6 +880,19 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
 +{
 +    return i == 1 ? 's' : (i == 2 ? 'p' : 'e');
 +}
++
++// Copia os valores atuais (volumes, idioma, luzes, camera) para as linhas da pagina de Opcoes
++static void N64_SyncOptions(Frontend* f)
++{
++    menu_option_0x82* o = f->field_136_menu_pages_array[MENUPAGE_15].field_4_options_array;
++    o[0].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_volume(0);
++    o[1].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_volume(1);
++    o[2].field_6E_horizontal_selected_idx = (u16)N64_LangIdx(gN64Language);
++    o[3].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_mode();
++}
++
++// Aplica o valor escolhido na linha `row` da pagina de Opcoes
++static void N64_ApplyOption(Frontend* f, int row, int val);
 +
 +// Troca o idioma na hora: recarrega o .gxt e remonta os textos de todas as paginas do menu
 +static void N64_ApplyLanguage(Frontend* f, char code)
@@ -796,30 +932,42 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
 +    f->SetupMenuStringsOptionsElements_4B0220();
 +    f->field_136_menu_pages_array[1].field_4_options_array[0].field_6E_horizontal_selected_idx = slot;
 +    f->field_136_menu_pages_array[MENUPAGE_15].field_BC6_current_option_idx = cur;
-+    f->field_136_menu_pages_array[MENUPAGE_15].field_4_options_array[0].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_volume(0);
-+    f->field_136_menu_pages_array[MENUPAGE_15].field_4_options_array[1].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_volume(1);
-+    f->field_136_menu_pages_array[MENUPAGE_15].field_4_options_array[2].field_6E_horizontal_selected_idx = (u16)N64_LangIdx(code);
++    N64_SyncOptions(f);
++}
++
++static void N64_ApplyOption(Frontend* f, int row, int val)
++{
++    if (row < 2)
++    {
++        gta2_n64_set_volume(row, val);
++    }
++    else if (row == 2)
++    {
++        N64_ApplyLanguage(f, N64_LangCode(val));
++    }
++    else if (row == 3)
++    {
++        gta2_n64_set_mode(val);
++    }
 +}
 +#endif
  
  DEFINE_GLOBAL(Frontend*, gFrontend_67DC84, 0x67DC84);
  DEFINE_GLOBAL_INIT(u32, counter_706C4C, 0, 0x706C4C);
-@@ -726,6 +785,14 @@
+@@ -726,6 +820,12 @@ void Frontend::ChangeMenuPage_4B3170(u16 menu_page_idx)
              Bink::OpenSlot2_5133E0(gFrontend_67DC84->intro_bik_4B5E50(), gSampManager_6FFF00.field_0_hDriver);
          }
      }
 +#ifdef N64
 +    else if (menu_page_idx == MENUPAGE_15)
 +    {
-+        field_136_menu_pages_array[MENUPAGE_15].field_4_options_array[0].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_volume(0);
-+        field_136_menu_pages_array[MENUPAGE_15].field_4_options_array[1].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_volume(1);
-+        field_136_menu_pages_array[MENUPAGE_15].field_4_options_array[2].field_6E_horizontal_selected_idx = (u16)N64_LangIdx(gN64Language);
++        N64_SyncOptions(this);
 +    }
 +#endif
      else if (menu_page_idx == MENUPAGE_START_MENU)
      {
          field_C9E4_last_input_time = timeGetTime();
-@@ -758,6 +825,14 @@
+@@ -758,6 +858,14 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
      {
          u16 plyr_idx = pOption->field_6E_horizontal_selected_idx;
          wchar_t* p_wName = (wchar_t*)&gPlyDat_6FEAC0->field_26A0_plyr_stats[plyr_idx].field_90_strPlayerName;
@@ -834,7 +982,7 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
          if (field_110_state == FrontendState::User_Typing_New_Player_Name_3)
          {
              // player typing a name
-@@ -775,6 +850,12 @@
+@@ -775,6 +883,16 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
              swprintf(gTmpWideStr_67C7D8, L"%s", gPlyDat_6FEAC0->field_26A0_plyr_stats[plyr_idx].field_90_strPlayerName);
          }
      }
@@ -843,16 +991,20 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
 +    {
 +        swprintf(gTmpWideStr_67C7D8, L"%s %s", pOption->field_6_option_name_str, pOption->field_6E_horizontal_selected_idx == 2 ? L"PORTUGUES" : (pOption->field_6E_horizontal_selected_idx == 1 ? L"ESPANOL" : L"ENGLISH"));
 +    }
++    else if (menu_page_idx == MENUPAGE_15 && option_idx == 3)
++    {
++        swprintf(gTmpWideStr_67C7D8, L"%s %s", pOption->field_6_option_name_str, pOption->field_6E_horizontal_selected_idx ? L"PC" : L"PSX");
++    }
 +#endif
      else if (menu_page_idx == MENUPAGE_VIEW_HIGH_SCORE && option_idx == 0)
      {
          swprintf(gTmpWideStr_67C7D8, L"%s", gText_0x14_704DFC->Find_5B5F90("hi_for"));
-@@ -1140,6 +1221,14 @@
+@@ -1140,6 +1258,14 @@ void Frontend::DrawMenu_4AD140()
  
              x_pos = pMenuOption->field_2_x_pos;
              y_pos = pMenuOption->field_4_y_pos;
 +#ifdef N64
-+            if (field_132_f136_idx == MENUPAGE_15 && option_idx < 3)
++            if (field_132_f136_idx == MENUPAGE_15 && option_idx < N64_OPT_ROWS)
 +            {
 +                // seta direita acompanha a largura do texto "MUSIC 10" / "EFFECTS 7"
 +                pMenuPage->field_518_elements_array[option_idx * 2 + 1].field_2_xpos =
@@ -862,7 +1014,7 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
  
              if (option_idx == pMenuPage->field_BC6_current_option_idx)
              {
-@@ -1750,6 +1839,12 @@
+@@ -1750,6 +1876,12 @@ void Frontend::UpdateMenuScreen_4B6780()
          {
              field_EE08_menu_screen = Credits_17;
          }
@@ -875,7 +1027,7 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
          else
          {
              field_EE08_menu_screen = PlayArea1_7;
-@@ -1935,6 +2030,12 @@
+@@ -1935,6 +2067,12 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
              }
              snd1_67D818.field_0_object_type = 5;
          }
@@ -888,7 +1040,7 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
          else if (field_132_f136_idx == MENUPAGE_PLAY && pBorg->field_BC6_current_option_idx == 0) // player
          {
              field_110_state = FrontendState::User_Typing_New_Player_Name_3;
-@@ -1956,6 +2057,9 @@
+@@ -1956,6 +2094,9 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
              case MENUPAGE_PARENTAL_CONTROL:
                  ChangeMenuPage_4B3170(MENUPAGE_CREDITS);
                  break;
@@ -898,22 +1050,14 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
              case MENUPAGE_PLAY:
              case MENUPAGE_DEAD:
              case MENUPAGE_AREA_COMPLETE:
-@@ -2011,6 +2115,24 @@
+@@ -2011,6 +2152,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                      snd1_67D818.field_0_object_type = 3;
                  }
              }
 +#ifdef N64
-+            if (field_132_f136_idx == MENUPAGE_15 && field_BC6_nifty_idx < 2)
++            if (field_132_f136_idx == MENUPAGE_15 && field_BC6_nifty_idx < N64_OPT_ROWS)
 +            {
-+                gta2_n64_set_volume(field_BC6_nifty_idx, v11->field_6E_horizontal_selected_idx);
-+                if (v12)
-+                {
-+                    snd1_67D818.field_0_object_type = 3;
-+                }
-+            }
-+            else if (field_132_f136_idx == MENUPAGE_15 && field_BC6_nifty_idx == 2)
-+            {
-+                N64_ApplyLanguage(this, N64_LangCode(v11->field_6E_horizontal_selected_idx));
++                N64_ApplyOption(this, field_BC6_nifty_idx, v11->field_6E_horizontal_selected_idx);
 +                if (v12)
 +                {
 +                    snd1_67D818.field_0_object_type = 3;
@@ -923,22 +1067,14 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
              pBorg = v18;
          }
          else if (field_132_f136_idx == MENUPAGE_PLAY)
-@@ -2053,6 +2175,24 @@
+@@ -2053,6 +2204,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                      snd1_67D818.field_0_object_type = 4;
                  }
              }
 +#ifdef N64
-+            if (field_132_f136_idx == MENUPAGE_15 && v14 < 2)
++            if (field_132_f136_idx == MENUPAGE_15 && v14 < N64_OPT_ROWS)
 +            {
-+                gta2_n64_set_volume(v14, v15->field_6E_horizontal_selected_idx);
-+                if (v16)
-+                {
-+                    snd1_67D818.field_0_object_type = 4;
-+                }
-+            }
-+            else if (field_132_f136_idx == MENUPAGE_15 && v14 == 2)
-+            {
-+                N64_ApplyLanguage(this, N64_LangCode(v15->field_6E_horizontal_selected_idx));
++                N64_ApplyOption(this, v14, v15->field_6E_horizontal_selected_idx);
 +                if (v16)
 +                {
 +                    snd1_67D818.field_0_object_type = 4;
@@ -948,7 +1084,7 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
              pBorg = v18;
          }
          else if (field_132_f136_idx == MENUPAGE_PLAY)
-@@ -3228,10 +3368,26 @@
+@@ -3228,10 +3389,26 @@ void Frontend::GetTgaIdxsForMenuScreen_4B6B00(u8 a1, BYTE* pTgaIdx, BYTE* a3)
      }
  }
  
@@ -975,7 +1111,7 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
  
      FILE* hFile = crt::fopen(tgaArray_61F0C8[idx].field_0_tga_name, "rb");
      if (!hFile)
-@@ -3533,7 +3689,11 @@
+@@ -3533,7 +3710,11 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
      wcsncpy(field_136_menu_pages_array[0].field_4_options_array[1].field_6_option_name_str,
              gText_0x14_704DFC->Find_5B5F90("options"),
              0x32u);
@@ -987,7 +1123,7 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
      field_136_menu_pages_array[0].field_4_options_array[2].field_0_option_type = STRING_TEXT_1;
      field_136_menu_pages_array[0].field_4_options_array[2].field_2_x_pos = 300;
      field_136_menu_pages_array[0].field_4_options_array[2].field_4_y_pos = 290;
-@@ -4085,6 +4245,56 @@
+@@ -4085,6 +4266,59 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
      field_136_menu_pages_array[14].field_B8A[0].field_2 = 348; //  TODO: check for wrong var
      field_136_menu_pages_array[14].field_BC6_current_option_idx = 0;
      field_136_menu_pages_array[14].field_BC8_default_option_idx = 0;
@@ -995,22 +1131,25 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
 +    {
 +        // Pagina de Opcoes da N64: na mesma coluna do menu inicial (x=300); setas como a pagina Play
 +        MenuPage_0xBCA& pg = field_136_menu_pages_array[MENUPAGE_15];
-+        pg.field_0_number_of_options = 4;
-+        pg.field_2_number_of_elements = 6;
++        pg.field_0_number_of_options = N64_OPT_ROWS + 1;
++        pg.field_2_number_of_elements = N64_OPT_ROWS * 2;
 +        const char lg = gText_0x14_704DFC->field_10_lang_code;
 +        const bool es = lg == 's';
 +        const bool pt = lg == 'p';
-+        const wchar_t* const kNames[3] = {(es || pt) ? L"MUSICA" : L"MUSIC", es ? L"EFECTOS" : (pt ? L"EFEITOS" : L"EFFECTS"), (es || pt) ? L"IDIOMA" : L"LANGUAGE"};
-+        for (s32 o = 0; o < 3; o++)
++        const wchar_t* const kNames[N64_OPT_ROWS] = {(es || pt) ? L"MUSICA" : L"MUSIC",
++                                                     es ? L"EFECTOS" : (pt ? L"EFEITOS" : L"EFFECTS"),
++                                                     (es || pt) ? L"IDIOMA" : L"LANGUAGE",
++                                                     (es || pt) ? L"MODO" : L"MODE"};
++        for (s32 o = 0; o < N64_OPT_ROWS; o++)
 +        {
 +            menu_option_0x82& op = pg.field_4_options_array[o];
 +            op.field_0_option_type = STRING_TEXT_2;
 +            op.field_2_x_pos = 300;
 +            op.field_4_y_pos = 250 + o * 20;
 +            wcsncpy(op.field_6_option_name_str, kNames[o], 0x32u);
-+            op.field_6E_horizontal_selected_idx = (o == 2) ? (u16)N64_LangIdx(lg) : 10;
++            op.field_6E_horizontal_selected_idx = (o == 2) ? (u16)N64_LangIdx(lg) : (o == 3 ? (u16)gta2_n64_get_mode() : 10);
 +            op.field_70 = 0;
-+            op.field_7E_horizontal_max_idx = (o == 2) ? 2 : 10;
++            op.field_7E_horizontal_max_idx = (o == 3) ? 1 : ((o == 2) ? 2 : 10);
 +            for (u16 k = 0; k <= op.field_7E_horizontal_max_idx; k++)
 +            {
 +                op.field_72_horizontal_idx_enabled[k] = 1;
@@ -1029,14 +1168,14 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
 +            right.field_4_ypos = 262 + o * 20;
 +            right.field_6_geometric_shape_type = 4;
 +        }
-+        menu_option_0x82& back = pg.field_4_options_array[3];
++        menu_option_0x82& back = pg.field_4_options_array[N64_OPT_ROWS];
 +        back.field_0_option_type = STRING_TEXT_1;
 +        back.field_2_x_pos = 300;
-+        back.field_4_y_pos = 330;
++        back.field_4_y_pos = 250 + N64_OPT_ROWS * 20 + 10;
 +        wcsncpy(back.field_6_option_name_str, gText_0x14_704DFC->Find_5B5F90("back"), 0x32u);
 +        back.field_80_menu_page_target = MENUPAGE_START_MENU;
-+        pg.field_B8A[3].field_0 = 280;
-+        pg.field_B8A[3].field_2 = 338;
++        pg.field_B8A[N64_OPT_ROWS].field_0 = 280;
++        pg.field_B8A[N64_OPT_ROWS].field_2 = 258 + N64_OPT_ROWS * 20 + 10;
 +        pg.field_BC6_current_option_idx = 0;
 +        pg.field_BC8_default_option_idx = 0;
 +    }
@@ -1044,10 +1183,11 @@ diff -ruN a/Source/Frontend.cpp b/Source/Frontend.cpp
      field_EE0E_credits.LoadCredits_483F20();
  }
  
-diff -ruN a/Source/Function.hpp b/Source/Function.hpp
---- a/Source/Function.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Function.hpp	2026-10-20 18:36:35.741332600 +0000
-@@ -179,7 +179,8 @@
+diff --git a/Source/Function.hpp b/Source/Function.hpp
+index b09cf6b..2d23e5e 100644
+--- a/Source/Function.hpp
++++ b/Source/Function.hpp
+@@ -179,7 +179,8 @@ void __stdcall LogFuncAddr(u32 codeAddr, s32 mode);
      #define DEFINE_GLOBAL_INIT(type, name, value, addr) type name = value
  
      #define DEFINE_GLOBAL_ARRAY(type, name, size, addr) type name[size]
@@ -1057,10 +1197,11 @@ diff -ruN a/Source/Function.hpp b/Source/Function.hpp
  
      #define EXTERN_GLOBAL(type, name) extern type name
      #define EXTERN_GLOBAL_ARRAY(type, name, size) extern type name[size]
-diff -ruN a/Source/Game_0x40.cpp b/Source/Game_0x40.cpp
---- a/Source/Game_0x40.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Game_0x40.cpp	2026-10-25 03:49:08.495777190 +0000
-@@ -933,7 +933,12 @@
+diff --git a/Source/Game_0x40.cpp b/Source/Game_0x40.cpp
+index 355af99..fcc3b4a 100644
+--- a/Source/Game_0x40.cpp
++++ b/Source/Game_0x40.cpp
+@@ -933,7 +933,12 @@ void Game_0x40::ReduceTrafficSpawnCounterOfOtherViewers_4B9D60(Sprite* a2, Playe
      }
  }
  
@@ -1073,9 +1214,10 @@ diff -ruN a/Source/Game_0x40.cpp b/Source/Game_0x40.cpp
  
  MATCH_FUNC(0x4B9DE0)
  Game_0x40::Game_0x40(u8 max_players, s8 player_idx) // 4B9DE0
-diff -ruN a/Source/Hud.cpp b/Source/Hud.cpp
---- a/Source/Hud.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Hud.cpp	2026-10-25 03:49:34.136777850 +0000
+diff --git a/Source/Hud.cpp b/Source/Hud.cpp
+index dbe84d1..3debabe 100644
+--- a/Source/Hud.cpp
++++ b/Source/Hud.cpp
 @@ -27,6 +27,14 @@
  #include "winmain.hpp"
  
@@ -1091,7 +1233,7 @@ diff -ruN a/Source/Hud.cpp b/Source/Hud.cpp
  DEFINE_GLOBAL(s16, gDebugFont_706600, 0x706600); //, TODO, 0xUNKNOWN);
  DEFINE_GLOBAL(s16, word_7064B8, 0x7064B8); //, TODO, 0xUNKNOWN);
  DEFINE_GLOBAL(u16, gZoneNameFont_706618, 0x706618); //, TODO, 0xUNKNOWN);
-@@ -290,6 +298,27 @@
+@@ -290,6 +298,27 @@ void Hud_GangRespectBars_1::DrawGangRespectBars_5CFA70()
      u32 random_num = gpRng_67AB34->get_cur_rng_41CFE0() & 0xF;
      u8 PlayerIdx = gGame_0x40_67E008->field_38_orf1->get_idx_4219D0();
      bool bPlusSignDark = random_num > 7u;
@@ -1119,7 +1261,7 @@ diff -ruN a/Source/Hud.cpp b/Source/Hud.cpp
  
      // 64 and the bar x go through the Fix16(u32) constructor (out-of-line copy 0x4926F0)
      s32 ypos = 11;
-@@ -364,6 +393,12 @@
+@@ -364,6 +393,12 @@ void Hud_GangRespectBars_1::DrawGangRespectBars_5CFA70()
              DrawText_5D7720(tmpBuff_67BD9C, 64u, ypos - 6, gDebugFont_706600, 8, text_palette, 0, 0);
          }
      }
@@ -1132,7 +1274,7 @@ diff -ruN a/Source/Hud.cpp b/Source/Hud.cpp
  }
  
  MATCH_FUNC(0x5cfe20)
-@@ -2327,6 +2362,11 @@
+@@ -2327,6 +2362,11 @@ void Hud_Brief_704::UpdateBrief_5D44D0()
                  field_514_upward_timer = 0;
              }
  
@@ -1144,7 +1286,7 @@ diff -ruN a/Source/Hud.cpp b/Source/Hud.cpp
              const s32 ary_val = field_0_str[field_514_upward_timer];
              if (!(ary_val % 20)) // (, <, P, d, x
              {
-@@ -2336,6 +2376,7 @@
+@@ -2336,6 +2376,7 @@ void Hud_Brief_704::UpdateBrief_5D44D0()
              {
                  field_50C_face_variant = 2 * (ary_val % 2); // mouth open and closed, but with open eyes
              }
@@ -1152,15 +1294,16 @@ diff -ruN a/Source/Hud.cpp b/Source/Hud.cpp
          }
  
          field_6F8_curr_briefs->field_10_was_displayed = 1;
-diff -ruN a/Source/InputRecorder_67F8B0.cpp b/Source/InputRecorder_67F8B0.cpp
---- a/Source/InputRecorder_67F8B0.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/InputRecorder_67F8B0.cpp	2026-10-25 03:49:34.142777850 +0000
+diff --git a/Source/InputRecorder_67F8B0.cpp b/Source/InputRecorder_67F8B0.cpp
+index 802ae85..e6f8b0e 100644
+--- a/Source/InputRecorder_67F8B0.cpp
++++ b/Source/InputRecorder_67F8B0.cpp
 @@ -1,3 +1,4 @@
 +#include "n64_population.h"
  #include "InputRecorder_67F8B0.hpp"
  #include "Game_0x40.hpp"
  #include "Globals.hpp"
-@@ -40,7 +41,16 @@
+@@ -40,7 +41,16 @@ DEFINE_GLOBAL(bool, gNeedKbAcquire_67B66C, 0x67B66C);
  DEFINE_GLOBAL(DIDEVICEOBJECTDATA, gKeyboardDeviceData_67B610, 0x67B610);
  DEFINE_GLOBAL(mini_device_obj_data, gGamePadDeviceData_67B5B0, 0x67B5B0);
  
@@ -1177,7 +1320,7 @@ diff -ruN a/Source/InputRecorder_67F8B0.cpp b/Source/InputRecorder_67F8B0.cpp
  DEFINE_GLOBAL_ARRAY(s32, gMaybeDeviceType_67B91C, 12, 0x67B91C);
  DEFINE_GLOBAL_ARRAY(s32, gPlayerControlsBinding_67B6E8, 12, 0x67B6E8);
  
-@@ -679,7 +689,7 @@
+@@ -679,7 +689,7 @@ void InputRecorder_67F8B0::SaveReplay_4CDED0()
      if (bConstant_replay_save_67D5C4 != 1 && bDo_release_replay_67D4EB && field_38_replay_state != Disabled_2 && field_75340_rec_buf_idx > 0 &&
          !RecOrPlayBackState_4CEDF0())
      {
@@ -1186,7 +1329,7 @@ diff -ruN a/Source/InputRecorder_67F8B0.cpp b/Source/InputRecorder_67F8B0.cpp
          File::AppendBufferToFile_4A6F50("test\\replay.rep", field_3C_rec_buff, &len);
      }
  }
-@@ -716,7 +726,7 @@
+@@ -716,7 +726,7 @@ void InputRecorder_67F8B0::AppendReplayHeader_4CDF70()
  {
      ReplayHeader_10C header;
      DWORD computer_name_size;
@@ -1195,10 +1338,11 @@ diff -ruN a/Source/InputRecorder_67F8B0.cpp b/Source/InputRecorder_67F8B0.cpp
  
      memset(&header, 0, sizeof(header));
      computer_name_size = 29;
-diff -ruN a/Source/InputRecorder_67F8B0.hpp b/Source/InputRecorder_67F8B0.hpp
---- a/Source/InputRecorder_67F8B0.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/InputRecorder_67F8B0.hpp	2026-10-20 20:30:32.791203000 +0000
-@@ -72,7 +72,11 @@
+diff --git a/Source/InputRecorder_67F8B0.hpp b/Source/InputRecorder_67F8B0.hpp
+index e8cef45..4850d11 100644
+--- a/Source/InputRecorder_67F8B0.hpp
++++ b/Source/InputRecorder_67F8B0.hpp
+@@ -72,7 +72,11 @@ class InputRecorder_67F8B0
    public:
      enum
      {
@@ -1210,10 +1354,11 @@ diff -ruN a/Source/InputRecorder_67F8B0.hpp b/Source/InputRecorder_67F8B0.hpp
      };
  
      EXPORT void StaticShutdown_4CDCD0(); // static dtor
-diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
---- a/Source/MapRenderer.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/MapRenderer.cpp	2026-10-21 06:42:40.000000000 +0000
-@@ -114,7 +114,7 @@
+diff --git a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
+index a73a45f..40f965c 100644
+--- a/Source/MapRenderer.cpp
++++ b/Source/MapRenderer.cpp
+@@ -114,7 +114,7 @@ static inline f32 Fix16ToF32_P3(const Fix16& v)
  
  struct VertProjector
  {
@@ -1222,7 +1367,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
      {
          set_vert_xyz_relative_to_cam_4EAD90(x, y, gZCoordTop_6F62B0, pVert);
          pVert->x = x.ToFloat() * gScreenScaleTop_6F628C.ToFloat() + (u32)gViewCamera_676978->field_70_screen_px_center_x;
-@@ -122,7 +122,7 @@
+@@ -122,7 +122,7 @@ struct VertProjector
          pVert->z = gInvDepthTop_6F656C.ToFloat();
      }
  
@@ -1231,7 +1376,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
      {
          set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, gZCoord_6F63E0, pVert);
      
-@@ -131,7 +131,7 @@
+@@ -131,7 +131,7 @@ struct VertProjector
          pVert->z = gInvDepthBottom_6F6318.ToFloat();
      }
  
@@ -1240,7 +1385,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
      {
          set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, zpos, pVert);
          pVert->z = 1.0f / (gViewCamera_676978->field_98_cam_pos2.field_8_z.ToFloat() + (8.0f - zpos.ToFloat()));
-@@ -155,7 +155,7 @@
+@@ -155,7 +155,7 @@ static VertProjector gVertProjector;
  // exactly 0 left (DrawLeftSide_4EA390's last operator+), so a bigger helper sends calls out of line.
  struct VertProjector2
  {
@@ -1249,7 +1394,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
      {
          set_vert_xyz_relative_to_cam_4EAD90(x, y, gZCoordTop_6F62B0, pVert);
          pVert->x = (((x.ToFloat())) * gScreenScaleTop_6F628C.ToFloat()) + (u32)gViewCamera_676978->field_70_screen_px_center_x;
-@@ -163,7 +163,7 @@
+@@ -163,7 +163,7 @@ struct VertProjector2
          pVert->z = gInvDepthTop_6F656C.ToFloat();
      }
  
@@ -1258,7 +1403,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
      {
          set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, gZCoord_6F63E0, pVert);
  
-@@ -172,7 +172,7 @@
+@@ -172,7 +172,7 @@ struct VertProjector2
          pVert->z = gInvDepthBottom_6F6318.ToFloat();
      }
  
@@ -1267,7 +1412,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
      {
          set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, zpos, pVert);
          pVert->z = 1.0f / (gViewCamera_676978->field_98_cam_pos2.field_8_z.ToFloat() + (8.0f - zpos.ToFloat()));
-@@ -186,7 +186,7 @@
+@@ -186,7 +186,7 @@ static VertProjector2 gVertProjector2;
  // DrawGradientSlopeSouthwards_4F1660 and Eastwards_4F33B0 load field_60 before x/y (see above).
  struct VertProjector3
  {
@@ -1276,7 +1421,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
      {
          set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, zpos, pVert);
          pVert->z = 1.0f / (gViewCamera_676978->field_98_cam_pos2.field_8_z.ToFloat() + (8.0f - zpos.ToFloat()));
-@@ -211,7 +211,7 @@
+@@ -211,7 +211,7 @@ static inline f32 Fix16ToF32_Stored(const Fix16& v)
  // field_60 fmuls behind that idiv, as in the original.
  struct VertProjector4
  {
@@ -1285,7 +1430,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
      {
          set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, zpos, pVert);
          pVert->z = 1.0f / (gViewCamera_676978->field_98_cam_pos2.field_8_z.ToFloat() + (8.0f - zpos.ToFloat()));
-@@ -731,7 +731,7 @@
+@@ -731,7 +731,7 @@ void __stdcall set_vert_xyz_relative_to_cam_4EAD90(Fix16 xCoord, Fix16 yCoord, F
  
  // This function matches, but the offsets of gScreenScaleTop_6F628C and gInvDepthTop_6F656C are wrong
  MATCH_FUNC(0x4eae00)
@@ -1294,7 +1439,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
  {
      set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, gZCoordTop_6F62B0, pVert);
      
-@@ -741,7 +741,7 @@
+@@ -741,7 +741,7 @@ void MapRenderer::ProjectVertTop_4EAE00(Fix16& xpos, Fix16& ypos, Vert* pVert)
  }
  
  MATCH_FUNC(0x4eaea0)
@@ -1303,7 +1448,7 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
  {
      set_vert_xyz_relative_to_cam_4EAD90(xCoord, yCoord, gZCoord_6F63E0, pVert);
  
-@@ -904,7 +904,7 @@
+@@ -904,7 +904,7 @@ void MapRenderer::DrawRightSide_4EAF40(u16& right_word)
  
  // https://decomp.me/scratch/GkGnQ
  MATCH_FUNC(0x4EB940)
@@ -1312,10 +1457,11 @@ diff -ruN a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
  {
      set_vert_xyz_relative_to_cam_inlined(xpos, ypos, zpos, pVert);
  
-diff -ruN a/Source/MapRenderer.hpp b/Source/MapRenderer.hpp
---- a/Source/MapRenderer.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/MapRenderer.hpp	2026-10-20 18:36:40.181368400 +0000
-@@ -52,10 +52,10 @@
+diff --git a/Source/MapRenderer.hpp b/Source/MapRenderer.hpp
+index 1aeda88..1652925 100644
+--- a/Source/MapRenderer.hpp
++++ b/Source/MapRenderer.hpp
+@@ -52,10 +52,10 @@ class MapRenderer
      EXPORT void ambient_light_tick_4E9EA0();
      EXPORT void draw_4EA190(u16& rotation_and_flip);
      EXPORT void DrawLeftSide_4EA390(u16& left_word);
@@ -1329,10 +1475,11 @@ diff -ruN a/Source/MapRenderer.hpp b/Source/MapRenderer.hpp
      EXPORT void DrawTopSide_4EBA60(u16& top_word);
      EXPORT void DrawDiagonalUpLeftFace_4EC450(u16& left_word);
      EXPORT void DrawDiagonalUpRightFace_4EC7A0(u16& right_word);
-diff -ruN a/Source/Object_3C.cpp b/Source/Object_3C.cpp
---- a/Source/Object_3C.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Object_3C.cpp	2026-10-20 18:36:36.606878500 +0000
-@@ -289,9 +289,24 @@
+diff --git a/Source/Object_3C.cpp b/Source/Object_3C.cpp
+index 42e3792..b394eb1 100644
+--- a/Source/Object_3C.cpp
++++ b/Source/Object_3C.cpp
+@@ -289,9 +289,24 @@ Sprite* struct_4::FirstSpriteOfType_5A6CA0(s32 sprite_type)
      return NULL;
  }
  
@@ -1357,7 +1504,7 @@ diff -ruN a/Source/Object_3C.cpp b/Source/Object_3C.cpp
      Sprite_18* p18 = gSprite_18_Pool_703B80->Allocate();
      p18->field_0 = pSprite;
      p18->mpNext = this->field_0_p18;
-@@ -303,6 +318,7 @@
+@@ -303,6 +318,7 @@ void struct_4::AddSprite_5A6CD0(Sprite* pSprite)
  MATCH_FUNC(0x5a6d00)
  void struct_4::PushImpactEvent_5A6D00(Sprite* pSprite1, Fix16 x, Fix16 y, Ang16 angle)
  {
@@ -1365,7 +1512,7 @@ diff -ruN a/Source/Object_3C.cpp b/Source/Object_3C.cpp
      Sprite_18* p18 = gSprite_18_Pool_703B80->Allocate();
      p18->field_0 = pSprite1;
      p18->mpNext = field_0_p18;
-@@ -325,6 +341,7 @@
+@@ -325,6 +341,7 @@ void struct_4::PushSprite_5A6D40(Sprite* pToFind)
          pIter = pIter->mpNext;
      }
  
@@ -1373,10 +1520,11 @@ diff -ruN a/Source/Object_3C.cpp b/Source/Object_3C.cpp
      Sprite_18* pNew = gSprite_18_Pool_703B80->Allocate();
      pNew->field_0 = pToFind;
  
-diff -ruN a/Source/Object_5C.cpp b/Source/Object_5C.cpp
---- a/Source/Object_5C.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Object_5C.cpp	2026-10-20 18:36:38.931695500 +0000
-@@ -342,7 +342,7 @@
+diff --git a/Source/Object_5C.cpp b/Source/Object_5C.cpp
+index a13aff0..2026fa4 100644
+--- a/Source/Object_5C.cpp
++++ b/Source/Object_5C.cpp
+@@ -342,7 +342,7 @@ char_type Object_2C::SelectCollisionSprite_522460(Sprite* a2)
  }
  
  MATCH_FUNC(0x5224e0)
@@ -1385,7 +1533,7 @@ diff -ruN a/Source/Object_5C.cpp b/Source/Object_5C.cpp
  {
      Fix16_Point v5;
      if (field_10_obj_3c)
-@@ -359,7 +359,7 @@
+@@ -359,7 +359,7 @@ void Object_2C::SetMovementVector_5224E0(Fix16_Point& speed)
  }
  
  MATCH_FUNC(0x522640)
@@ -1394,7 +1542,7 @@ diff -ruN a/Source/Object_5C.cpp b/Source/Object_5C.cpp
  {
      SetMovementVector_5224E0(a2);
  
-@@ -2282,7 +2282,7 @@
+@@ -2282,7 +2282,7 @@ void Object_2C::ReleaseSubObjects_527F10()
  
  // 9.6f 0x4847D0
  MATCH_FUNC(0x528130)
@@ -1403,10 +1551,11 @@ diff -ruN a/Source/Object_5C.cpp b/Source/Object_5C.cpp
  {
      Object_3C* pNewObj = gObject_3C_Pool_6F8F7C->Allocate();
  
-diff -ruN a/Source/Object_5C.hpp b/Source/Object_5C.hpp
---- a/Source/Object_5C.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Object_5C.hpp	2026-10-20 18:36:39.190070000 +0000
-@@ -45,8 +45,8 @@
+diff --git a/Source/Object_5C.hpp b/Source/Object_5C.hpp
+index a764cad..37cc7ea 100644
+--- a/Source/Object_5C.hpp
++++ b/Source/Object_5C.hpp
+@@ -45,8 +45,8 @@ class Object_2C
      EXPORT bool ShouldStopAtTrafficLight_525290(Sprite* pSprite);
      EXPORT bool ShouldCollideWithSprite_522430(Sprite* a2);
      EXPORT char_type SelectCollisionSprite_522460(Sprite* a2);
@@ -1417,7 +1566,7 @@ diff -ruN a/Source/Object_5C.hpp b/Source/Object_5C.hpp
      EXPORT void SetConveyorPush_5226A0(char_type conveyor_speed);
      EXPORT void ResolveCollisionWithObject_522710(Object_2C* a2, Fix16_Point* a3);
      EXPORT void ResolveCollisionWithPed_5229B0(Char_B4* a2, Fix16_Point* a3, u8 a4);
-@@ -81,7 +81,7 @@
+@@ -81,7 +81,7 @@ class Object_2C
      EXPORT void AssignToBucket_527AE0();
      EXPORT void RemoveFromCollisionBuckets_527D00();
      EXPORT void ReleaseSubObjects_527F10();
@@ -1426,10 +1575,11 @@ diff -ruN a/Source/Object_5C.hpp b/Source/Object_5C.hpp
      EXPORT char_type HandleRotationStateTransition_528240(s32 a2, s32 a3);
      EXPORT void TickObject_5283C0(s32 a2);
      EXPORT char_type OnObjectTouched_5288B0(Sprite* a2);
-diff -ruN a/Source/Particle_4C.cpp b/Source/Particle_4C.cpp
---- a/Source/Particle_4C.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Particle_4C.cpp	2026-10-21 23:37:38.165185600 +0000
-@@ -30,8 +30,14 @@
+diff --git a/Source/Particle_4C.cpp b/Source/Particle_4C.cpp
+index 57cd24e..e650f3b 100644
+--- a/Source/Particle_4C.cpp
++++ b/Source/Particle_4C.cpp
+@@ -30,8 +30,14 @@ EXTERN_GLOBAL(Fix16, dword_6FD4CC);
  EXTERN_GLOBAL(Fix16, dword_6FD328);
  
  DEFINE_GLOBAL_INIT(Fix16, dword_6FD46C, Fix16(0x333, 0), 0x6FD46C);
@@ -1444,16 +1594,17 @@ diff -ruN a/Source/Particle_4C.cpp b/Source/Particle_4C.cpp
  //DEFINE_GLOBAL(Fix16_Point, stru_6FD388, 0x6FD388);
  
  DEFINE_GLOBAL(Fix16, stru_6FD388, 0x6FD388);
-diff -ruN a/Source/Particle_8.cpp b/Source/Particle_8.cpp
---- a/Source/Particle_8.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Particle_8.cpp	2026-10-25 03:49:34.136777850 +0000
+diff --git a/Source/Particle_8.cpp b/Source/Particle_8.cpp
+index e420a03..ed70fc0 100644
+--- a/Source/Particle_8.cpp
++++ b/Source/Particle_8.cpp
 @@ -1,4 +1,5 @@
  #include "Particle_8.hpp"
 +#include "n64_population.h"
  #include "Car_BC.hpp"
  #include "CarPhysics_B0.hpp"
  #include "Globals.hpp"
-@@ -54,17 +55,33 @@
+@@ -54,17 +55,33 @@ DEFINE_GLOBAL_INIT(Fix16, dword_6FD464, Fix16(0x1EB, 0), 0x6FD464);
  DEFINE_GLOBAL(u16, gParticleInstCount_6FD5F4, 0x6FD5F4);
  
  MATCH_FUNC(0x53e320)
@@ -1487,7 +1638,7 @@ diff -ruN a/Source/Particle_8.cpp b/Source/Particle_8.cpp
          pNew4C = gParticle_4C_Pool_6FD5E4->Allocate();
          pNew4C->field_8_speed_x = speed_x;
          pNew4C->field_C_speed_y = speed_y;
-@@ -495,7 +512,7 @@
+@@ -495,7 +512,7 @@ void Particle_8::EmitFireTruckSprayParticle_53FAE0(Sprite* pSprite)
  
  // Ang16::PolarToCartesian_41FC20 with the cosine multiply written as the out-of-line Multiply_408680
  // the original calls (past the inline budget VC6 would call a COMDAT copy of operator* instead).
@@ -1496,10 +1647,11 @@ diff -ruN a/Source/Particle_8.cpp b/Source/Particle_8.cpp
  {
      ret1 = Ang16::sine_40F500(angle) * radius;
      ret2 = Ang16::cosine_40F520(angle).Multiply_408680(radius);
-diff -ruN a/Source/Ped.cpp b/Source/Ped.cpp
---- a/Source/Ped.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Ped.cpp	2026-10-20 18:36:37.512406800 +0000
-@@ -1655,7 +1655,7 @@
+diff --git a/Source/Ped.cpp b/Source/Ped.cpp
+index 7450d4b..ed9a30d 100644
+--- a/Source/Ped.cpp
++++ b/Source/Ped.cpp
+@@ -1655,7 +1655,7 @@ void Ped::HandlePedCrossingTrigger_45CF20(Object_2C* pObj)
      }
  }
  
@@ -1508,7 +1660,7 @@ diff -ruN a/Source/Ped.cpp b/Source/Ped.cpp
  
  // 10.5 inlines this into HandlePedHitByObject_45D000 (the first call there; the second one
  // calls 0x465D00) and into IsThreatToSearchingPed_4661F0 (search mode 1), so it has to be defined
-@@ -5929,7 +5929,7 @@
+@@ -5929,7 +5929,7 @@ char_type Ped::IsInvisibleOnFoot_466B70()
  // Returns Fix16 by value (hidden out pointer, ret $0x14). Max of the two Abs written out with
  // the y abs first: Fix16::Max takes references and spills both to the stack.
  MATCH_FUNC(0x4614e0)
@@ -1517,10 +1669,11 @@ diff -ruN a/Source/Ped.cpp b/Source/Ped.cpp
  {
      Fix16 diff_x = x2 - x1;
      Fix16 diff_y = y2 - y1;
-diff -ruN a/Source/PedGroup.cpp b/Source/PedGroup.cpp
---- a/Source/PedGroup.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/PedGroup.cpp	2026-10-25 03:49:34.138777850 +0000
-@@ -678,6 +678,9 @@
+diff --git a/Source/PedGroup.cpp b/Source/PedGroup.cpp
+index 7b8d917..375a2a5 100644
+--- a/Source/PedGroup.cpp
++++ b/Source/PedGroup.cpp
+@@ -678,6 +678,9 @@ char_type PedGroup::MergeWithOtherGroup_4C9B60(Ped* pPed)
              }
          }
      }
@@ -1530,15 +1683,16 @@ diff -ruN a/Source/PedGroup.cpp b/Source/PedGroup.cpp
  }
  #pragma warning(pop)
  
-diff -ruN a/Source/Player.cpp b/Source/Player.cpp
---- a/Source/Player.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Player.cpp	2026-10-25 03:49:34.142777850 +0000
+diff --git a/Source/Player.cpp b/Source/Player.cpp
+index 2263095..212766a 100644
+--- a/Source/Player.cpp
++++ b/Source/Player.cpp
 @@ -1,3 +1,4 @@
 +#include "n64_population.h"
  #include "Player.hpp"
  #include "hud_message_priority.hpp"
  #include "voice_line.hpp"
-@@ -2017,7 +2018,7 @@
+@@ -2017,7 +2018,7 @@ void Player::Service_5687F0()
      const bool bNowSpecial_1_Pressed = this->field_81_bNowSpecial_1_Pressed;
      const bool bWasSpecial_1_Pressed = this->field_84_bWasSpecial_1_Pressed;
  
@@ -1547,10 +1701,11 @@ diff -ruN a/Source/Player.cpp b/Source/Player.cpp
      {
          this->field_680_traffic_spawn_counter++;
      }
-diff -ruN a/Source/PlyDat_2BC0.cpp b/Source/PlyDat_2BC0.cpp
---- a/Source/PlyDat_2BC0.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/PlyDat_2BC0.cpp	2026-10-25 01:24:32.334631400 +0000
-@@ -334,6 +334,18 @@
+diff --git a/Source/PlyDat_2BC0.cpp b/Source/PlyDat_2BC0.cpp
+index 292fa4c..5f4dbab 100644
+--- a/Source/PlyDat_2BC0.cpp
++++ b/Source/PlyDat_2BC0.cpp
+@@ -334,6 +334,18 @@ PlyDat_2BC0::PlyDat_2BC0()
          SaveHiScores_56BF20();
      }
  
@@ -1569,7 +1724,7 @@ diff -ruN a/Source/PlyDat_2BC0.cpp b/Source/PlyDat_2BC0.cpp
      InitAltHiScores_56BD20();
  }
  
-@@ -407,7 +419,7 @@
+@@ -407,7 +419,7 @@ MATCH_FUNC(0x56BA60)
  void PlyDat_2BC0::SavePlySlotDat_56BA60(s16 slotIdx)
  {
      char_type FileName[356];
@@ -1578,7 +1733,7 @@ diff -ruN a/Source/PlyDat_2BC0.cpp b/Source/PlyDat_2BC0.cpp
  
      GetPlySlotDatName_56B8A0(slotIdx, FileName);
  
-@@ -576,7 +588,7 @@
+@@ -576,7 +588,7 @@ MATCH_FUNC(0x56BF20)
  void PlyDat_2BC0::SaveHiScores_56BF20()
  {
      char_type FileName[256];
@@ -1587,16 +1742,17 @@ diff -ruN a/Source/PlyDat_2BC0.cpp b/Source/PlyDat_2BC0.cpp
  
      GetHiScoreHscFileName_56BCF0(FileName);
  
-diff -ruN a/Source/Police_38.cpp b/Source/Police_38.cpp
---- a/Source/Police_38.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Police_38.cpp	2026-10-25 00:00:18.730141800 +0000
+diff --git a/Source/Police_38.cpp b/Source/Police_38.cpp
+index c6d5b6e..8bc8119 100644
+--- a/Source/Police_38.cpp
++++ b/Source/Police_38.cpp
 @@ -1,4 +1,5 @@
  #include "Police_38.hpp"
 +#include "n64_population.h"
  #include "Car_BC.hpp"
  #include "Char_Pool.hpp"
  #include "Fix16_Rect.hpp"
-@@ -658,7 +659,7 @@
+@@ -658,7 +659,7 @@ void PoliceCrew_38::State3_AlertedSearch_572340()
      }
      else if (field_10_subObj->field_2C_ready)
      {
@@ -1605,7 +1761,7 @@ diff -ruN a/Source/Police_38.cpp b/Source/Police_38.cpp
          {
              switch (field_10_subObj->field_20_crew_type)
              {
-@@ -828,7 +829,7 @@
+@@ -828,7 +829,7 @@ DEFINE_GLOBAL_INIT(Fix16, dword_6FECB8, Fix16(0x147, 0), 0x6FECB8);
  
  // MaxAbsDistance_42A6B0 as State5_PursueOrChase_572920 inlines it: past the nested inline budget, Max is the named
  // out-of-line copy Max_44E540 (as in Weapon_30's MaxAbsDistance_5DF270)
@@ -1614,7 +1770,7 @@ diff -ruN a/Source/Police_38.cpp b/Source/Police_38.cpp
  {
      Fix16 diff_x;
      diff_x = x2 - x1;
-@@ -875,7 +876,7 @@
+@@ -875,7 +876,7 @@ void PoliceCrew_38::State5_PursueOrChase_572920()
      {
          if (field_10_subObj->field_2C_ready)
          {
@@ -1623,16 +1779,17 @@ diff -ruN a/Source/Police_38.cpp b/Source/Police_38.cpp
              {
                  switch (field_10_subObj->field_20_crew_type)
                  {
-diff -ruN a/Source/Police_7B8.cpp b/Source/Police_7B8.cpp
---- a/Source/Police_7B8.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Police_7B8.cpp	2026-10-25 03:49:34.136777850 +0000
+diff --git a/Source/Police_7B8.cpp b/Source/Police_7B8.cpp
+index 7f4c396..4811a0b 100644
+--- a/Source/Police_7B8.cpp
++++ b/Source/Police_7B8.cpp
 @@ -1,4 +1,5 @@
  #include "Police_7B8.hpp"
 +#include "n64_population.h"
  #include "Car_BC.hpp"
  #include "Char_Pool.hpp"
  #include "Game_0x40.hpp"
-@@ -143,7 +144,7 @@
+@@ -143,7 +144,7 @@ Ped* Police_7B8::SpawnRoadblockGuard_56F5C0(Fix16 xpos, Fix16 ypos, Fix16 zpos,
  {
      Ped* pCop = NULL;
  
@@ -1641,7 +1798,7 @@ diff -ruN a/Source/Police_7B8.cpp b/Source/Police_7B8.cpp
      {
          return NULL;
      }
-@@ -388,7 +389,16 @@
+@@ -388,7 +389,16 @@ bool Police_7B8::DispatchNewCrewToPursuit_56FAA0(PolicePursuitTarget_7C* pPursui
  
      if (gPathFinder_6FDEF0->FindNearbyTileMatchingSlopeType_5552B0(1, &tileX, &tileY, &tileZ, 0))
      {
@@ -1658,7 +1815,7 @@ diff -ruN a/Source/Police_7B8.cpp b/Source/Police_7B8.cpp
          pNewPoliceCrew->field_1C_used = 1;
          pNewPoliceCrew->field_2_targ_x = tileX;
          pNewPoliceCrew->field_3_targ_y = tileY;
-@@ -842,7 +852,7 @@
+@@ -842,7 +852,7 @@ void Police_7B8::SpawnWalkingGuard_570320(Ped* pPed, Fix16 xpos, Fix16 ypos, Fix
  MATCH_FUNC(0x5703e0)
  bool Police_7B8::SpawnCrewInCar_5703E0(Car_BC* pCar)
  {
@@ -1667,10 +1824,11 @@ diff -ruN a/Source/Police_7B8.cpp b/Source/Police_7B8.cpp
      {
          return false;
      }
-diff -ruN a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
---- a/Source/ScriptManager_C1EA8.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/ScriptManager_C1EA8.cpp	2026-10-21 21:40:44.605912900 +0000
-@@ -217,12 +217,12 @@
+diff --git a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
+index 7e44912..8f2bb3f 100644
+--- a/Source/ScriptManager_C1EA8.cpp
++++ b/Source/ScriptManager_C1EA8.cpp
+@@ -217,12 +217,12 @@ void ScriptManager_C1EA8::SaveGame_511E10(char_type* pFileName)
      ScriptManager_C1EA8::SaveMapInfo_511D40();
  
      {
@@ -1685,7 +1843,7 @@ diff -ruN a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
          File::AppendBufferToFile_4A6F50(pFileName, &colBytes, &writeLen);
          if (colBytes)
          {
-@@ -231,7 +231,7 @@
+@@ -231,7 +231,7 @@ void ScriptManager_C1EA8::SaveGame_511E10(char_type* pFileName)
      }
  
      {
@@ -1694,7 +1852,7 @@ diff -ruN a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
          File::AppendBufferToFile_4A6F50(pFileName, &blockInfoBytes, &writeLen);
          if (blockInfoBytes)
          {
-@@ -240,7 +240,7 @@
+@@ -240,7 +240,7 @@ void ScriptManager_C1EA8::SaveGame_511E10(char_type* pFileName)
      }
  
      {
@@ -1703,7 +1861,7 @@ diff -ruN a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
          File::AppendBufferToFile_4A6F50(pFileName, &mapSubBytes, &writeLen);
          if (mapSubBytes)
          {
-@@ -252,9 +252,9 @@
+@@ -252,9 +252,9 @@ void ScriptManager_C1EA8::SaveGame_511E10(char_type* pFileName)
  MATCH_FUNC(0x511f80)
  void ScriptManager_C1EA8::LoadSave_511F80(char_type* pFileName)
  {
@@ -1716,7 +1874,7 @@ diff -ruN a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
      u16** pColData;
      gmp_block_info* pBlockInfo;
      Map_sub* pMapSub;
-@@ -416,6 +416,68 @@
+@@ -416,6 +416,68 @@ void ScriptManager_C1EA8::GetScrFileName_5122D0()
  MATCH_FUNC(0x512330)
  void ScriptManager_C1EA8::Load_512330(const char_type* pScrName)
  {
@@ -1785,7 +1943,7 @@ diff -ruN a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
      if (!bSkip_mission_67D4E5)
      {
          strcpy(field_35C_full_scr_file_name, pScrName);
-@@ -444,8 +506,14 @@
+@@ -444,8 +506,14 @@ u16 ScriptManager_C1EA8::LoadMissionScript_512400(const char_type* String1, u16*
      if (gScriptManager_6F8060->field_2F4_bPreloadMissionScripts == 0)
      {
          u32 v8;
@@ -1800,7 +1958,7 @@ diff -ruN a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
          Error_SetName_4A0770(gTmpBuffer_67C598);
          File::Global_Open_4A7060(gTmpBuffer_67C598);
          File::Global_Read_4A71C0(&Buffer, 2);
-@@ -887,7 +955,12 @@
+@@ -887,7 +955,12 @@ ScriptManager_C1EA8::ScriptManager_C1EA8()
      memset(field_C1D72_mission_base_ptr_idx, 0, sizeof(field_C1D72_mission_base_ptr_idx));
      memset(field_C1DB0_mission_script_data_len, 0, sizeof(field_C1DB0_mission_script_data_len));
      field_344_mission_flag = 0;
@@ -1813,10 +1971,11 @@ diff -ruN a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
      field_C1E2C_bLoadedFromSave = 0;
      field_310_finish_score = 0;
      field_314_total_missions = 0;
-diff -ruN a/Source/ScriptManager_C1EA8.hpp b/Source/ScriptManager_C1EA8.hpp
---- a/Source/ScriptManager_C1EA8.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/ScriptManager_C1EA8.hpp	2026-10-20 21:36:01.228376500 +0000
-@@ -726,8 +726,14 @@
+diff --git a/Source/ScriptManager_C1EA8.hpp b/Source/ScriptManager_C1EA8.hpp
+index ff78f59..4a37870 100644
+--- a/Source/ScriptManager_C1EA8.hpp
++++ b/Source/ScriptManager_C1EA8.hpp
+@@ -726,8 +726,14 @@ class ScriptManager_C1EA8
      BYTE field_334C_script_data[65536];
      str_table_entry* field_1334C_strings;
      str_table_normalized* field_13350_pStringTbl;
@@ -1831,9 +1990,10 @@ diff -ruN a/Source/ScriptManager_C1EA8.hpp b/Source/ScriptManager_C1EA8.hpp
      s16 field_C1D34_mission_start_cmd[31];
      s16 field_C1D72_mission_base_ptr_idx[31];
      u32 field_C1DB0_mission_script_data_len[31];
-diff -ruN a/Source/SpriteRenderer_1C.cpp b/Source/SpriteRenderer_1C.cpp
---- a/Source/SpriteRenderer_1C.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/SpriteRenderer_1C.cpp	2026-10-21 06:42:40.000000000 +0000
+diff --git a/Source/SpriteRenderer_1C.cpp b/Source/SpriteRenderer_1C.cpp
+index 7896539..c620782 100644
+--- a/Source/SpriteRenderer_1C.cpp
++++ b/Source/SpriteRenderer_1C.cpp
 @@ -5,6 +5,9 @@
  #include "sprite.hpp"
  
@@ -1844,7 +2004,7 @@ diff -ruN a/Source/SpriteRenderer_1C.cpp b/Source/SpriteRenderer_1C.cpp
  EXPORT s32 get_rdtsc_5BEE90();
  EXTERN_GLOBAL(u32, dword_705334);
  
-@@ -72,6 +75,9 @@
+@@ -72,6 +75,9 @@ SpriteRenderer_1C::~SpriteRenderer_1C()
  MATCH_FUNC(0x5BEE90)
  EXPORT s32 get_rdtsc_5BEE90()
  {
@@ -1854,7 +2014,7 @@ diff -ruN a/Source/SpriteRenderer_1C.cpp b/Source/SpriteRenderer_1C.cpp
      // NOTE: Actually is inline assembly, surprisingly
      unsigned __int64 t;
      __asm
-@@ -87,6 +93,7 @@
+@@ -87,6 +93,7 @@ EXPORT s32 get_rdtsc_5BEE90()
          popad
      }
      return static_cast<s32>(t);
@@ -1862,9 +2022,10 @@ diff -ruN a/Source/SpriteRenderer_1C.cpp b/Source/SpriteRenderer_1C.cpp
  }
  
  // Converts a cycle count from get_rdtsc_5BEE90 for the profiler display (dword_705334 is the
-diff -ruN a/Source/TextureCache_15D8.cpp b/Source/TextureCache_15D8.cpp
---- a/Source/TextureCache_15D8.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/TextureCache_15D8.cpp	2026-10-25 03:49:34.142777850 +0000
+diff --git a/Source/TextureCache_15D8.cpp b/Source/TextureCache_15D8.cpp
+index ad7461e..9ca516b 100644
+--- a/Source/TextureCache_15D8.cpp
++++ b/Source/TextureCache_15D8.cpp
 @@ -7,10 +7,18 @@
  #include "sprite.hpp"
  #include "memory.hpp"
@@ -1884,7 +2045,7 @@ diff -ruN a/Source/TextureCache_15D8.cpp b/Source/TextureCache_15D8.cpp
  MATCH_FUNC(0x5B8E90)
  void RemapTextureSet_14::Alloc_5B8E90(s16 sprite_count, s16 remaps_per_sprite, s32 sprite_type, s32 pal_type)
  {
-@@ -38,6 +46,9 @@
+@@ -38,6 +46,9 @@ void RemapTextureSet_14::LoadTextures_5B8F00()
  {
      if (field_10_bDoFree)
      {
@@ -1894,7 +2055,7 @@ diff -ruN a/Source/TextureCache_15D8.cpp b/Source/TextureCache_15D8.cpp
          u32 i = 0;
          sprite_index* pSpriteIndex;
          u16 tmp;
-@@ -64,6 +75,9 @@
+@@ -64,6 +75,9 @@ void RemapTextureSet_14::LoadRemappedTextures_5B8F70()
  {
      if (field_10_bDoFree)
      {
@@ -1904,7 +2065,7 @@ diff -ruN a/Source/TextureCache_15D8.cpp b/Source/TextureCache_15D8.cpp
          const u32 palTotal = field_4_texture_count / field_6_remaps_per_sprite;
          for (u32 pal_idx = 0; pal_idx < palTotal; pal_idx++)
          {
-@@ -92,7 +106,10 @@
+@@ -92,7 +106,10 @@ RemapTextureSet_14::~RemapTextureSet_14()
      {
          for (u16 i = 0; i < field_4_texture_count; ++i)
          {
@@ -1916,7 +2077,7 @@ diff -ruN a/Source/TextureCache_15D8.cpp b/Source/TextureCache_15D8.cpp
          }
  
          crt::free(field_0_pTextures);
-@@ -103,12 +120,36 @@
+@@ -103,12 +120,36 @@ RemapTextureSet_14::~RemapTextureSet_14()
  MATCH_FUNC(0x5B90A0)
  STexture* RemapTextureSet_14::get_texture_5B90A0(s32 sprite_type, s16 sprite_idx)
  {
@@ -1953,7 +2114,7 @@ diff -ruN a/Source/TextureCache_15D8.cpp b/Source/TextureCache_15D8.cpp
      return field_0_pTextures[(u16)(remap + (sprite_idx * field_6_remaps_per_sprite))];
  }
  
-@@ -116,6 +157,9 @@
+@@ -116,6 +157,9 @@ MATCH_FUNC(0x5B90F0)
  void TextureCache_15D8::LoadPals_5B90F0()
  {
      field_15D6_pal_count = gGtx_0x106C_703DD4->get_physical_palettes_len_5AA900();
@@ -1963,10 +2124,11 @@ diff -ruN a/Source/TextureCache_15D8.cpp b/Source/TextureCache_15D8.cpp
  
      for (u16 palId = 0; palId < field_15D6_pal_count; palId++)
      {
-diff -ruN a/Source/Weapon_30.cpp b/Source/Weapon_30.cpp
---- a/Source/Weapon_30.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Weapon_30.cpp	2026-10-20 18:36:38.608291500 +0000
-@@ -227,7 +227,7 @@
+diff --git a/Source/Weapon_30.cpp b/Source/Weapon_30.cpp
+index b472010..a63b169 100644
+--- a/Source/Weapon_30.cpp
++++ b/Source/Weapon_30.cpp
+@@ -227,7 +227,7 @@ void Weapon_30::TickReloadSpeed_5DCF40()
  
  // 9.6f 0x4CDA90
  MATCH_FUNC(0x5dcf60)
@@ -1975,7 +2137,7 @@ diff -ruN a/Source/Weapon_30.cpp b/Source/Weapon_30.cpp
  {
      // probe_x/probe_y are assigned, not initialised: initialised, VC6 folds them into the call
      // arguments and computes y first
-@@ -725,7 +725,7 @@
+@@ -725,7 +725,7 @@ void Weapon_30::throwable_5DDFC0(s32 obj_idx, s32 a3, s32 a4)
      }
  }
  
@@ -1984,7 +2146,7 @@ diff -ruN a/Source/Weapon_30.cpp b/Source/Weapon_30.cpp
  
  // GetLength_41E260 with both Abs and the x multiply, the add and the square root out of line
  static inline Fix16 BeamLength_5DE4F0(Fix16_Point& d)
-@@ -884,7 +884,7 @@
+@@ -884,7 +884,7 @@ static inline Fix16 BeamLength_5DE910(Fix16_Point& d)
  // (likely the original's by-value a1 is one of them). `d` is reused for the rest of the way and
  // `len` for the straight segment count, as the original's frame shows.
  MATCH_FUNC(0x5de910)
@@ -1993,7 +2155,7 @@ diff -ruN a/Source/Weapon_30.cpp b/Source/Weapon_30.cpp
  {
      Fix16_Point d;
      Fix16_Point start;
-@@ -980,7 +980,7 @@
+@@ -980,7 +980,7 @@ void __stdcall sub_5DE910(Fix16_Point_POD a1, Fix16_Point& a2, Fix16 a3)
  
  // MaxAbsDistance_42A6B0 as sub_5DF270 inlines it: past the inline budget, Max is the named out-of-line copy
  // Max_44E540 (the Abs calls and the y subtraction go out of line by themselves)
@@ -2002,10 +2164,11 @@ diff -ruN a/Source/Weapon_30.cpp b/Source/Weapon_30.cpp
  {
      Fix16 diff_x;
      diff_x = x2 - x1;
-diff -ruN a/Source/Weapon_30.hpp b/Source/Weapon_30.hpp
---- a/Source/Weapon_30.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/Weapon_30.hpp	2026-10-20 18:36:40.215368400 +0000
-@@ -57,7 +57,7 @@
+diff --git a/Source/Weapon_30.hpp b/Source/Weapon_30.hpp
+index dc5a8e7..827f21b 100644
+--- a/Source/Weapon_30.hpp
++++ b/Source/Weapon_30.hpp
+@@ -57,7 +57,7 @@ class Weapon_30
      EXPORT bool is_max_capacity_5DCEA0();
      EXPORT bool sub_5DCEF0();
      EXPORT void TickReloadSpeed_5DCF40();
@@ -2014,10 +2177,11 @@ diff -ruN a/Source/Weapon_30.hpp b/Source/Weapon_30.hpp
      EXPORT void flamethrower_5DD0F0();
      EXPORT void shotgun_5DD290();
      EXPORT void pistol_5DD860();
-diff -ruN a/Source/ang16.cpp b/Source/ang16.cpp
---- a/Source/ang16.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/ang16.cpp	2026-10-21 06:42:40.000000000 +0000
-@@ -92,7 +92,7 @@
+diff --git a/Source/ang16.cpp b/Source/ang16.cpp
+index 8b38640..cb454ee 100644
+--- a/Source/ang16.cpp
++++ b/Source/ang16.cpp
+@@ -92,7 +92,7 @@ Ang16::Ang16(Fix16* a2, s32 a3)
  
  // TODO: move
  MATCH_FUNC(0x451730)
@@ -2026,7 +2190,7 @@ diff -ruN a/Source/ang16.cpp b/Source/ang16.cpp
  {
      ret1 = radius * Ang16::sine_40F500(angle);
      ret2 = radius * Ang16::cosine_40F520(angle);
-@@ -105,7 +105,7 @@
+@@ -105,7 +105,7 @@ Ang16 Ang16::Fix16_To_Ang16_482740(Fix16& a2)
  }
  
  MATCH_FUNC(0x4F78F0)
@@ -2035,10 +2199,11 @@ diff -ruN a/Source/ang16.cpp b/Source/ang16.cpp
  {
      if (a1 <= kAng45_6F677C || a1 > kAng315_6F680C) //  45° and 315°
      {
-diff -ruN a/Source/ang16.hpp b/Source/ang16.hpp
---- a/Source/ang16.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/ang16.hpp	2026-10-20 18:36:40.035740500 +0000
-@@ -10,27 +10,27 @@
+diff --git a/Source/ang16.hpp b/Source/ang16.hpp
+index 35ddde0..4cb0902 100644
+--- a/Source/ang16.hpp
++++ b/Source/ang16.hpp
+@@ -10,27 +10,27 @@ class Ang16
    public:
      //   Ang16  and  Ang16
      // 9.6f 0x40E670/0x41E0F0/0x40F4C0/0x40E690: setcc into a 32-bit register, so these return int, not bool
@@ -2071,7 +2236,7 @@ diff -ruN a/Source/ang16.hpp b/Source/ang16.hpp
      {
          return rValue != other.rValue;
      }
-@@ -58,19 +58,19 @@
+@@ -58,19 +58,19 @@ class Ang16
      }
      */
  
@@ -2094,7 +2259,7 @@ diff -ruN a/Source/ang16.hpp b/Source/ang16.hpp
      {
          s16 value = rValue + rhs.rValue;
          return Ang16(value, 0);
-@@ -94,29 +94,29 @@
+@@ -94,29 +94,29 @@ class Ang16
      // 9.6f 0x49E240, defined in CarPhysics_B0.cpp
      inline wchar_t* ThetaText_49E240();
  
@@ -2129,7 +2294,7 @@ diff -ruN a/Source/ang16.hpp b/Source/ang16.hpp
      {
          return rValue <= other;
      }
-@@ -250,16 +250,16 @@
+@@ -250,16 +250,16 @@ class Ang16
      }
  
      // 9.6f 0x41FC20: the table value is the left operand (this) of the multiply
@@ -2149,7 +2314,7 @@ diff -ruN a/Source/ang16.hpp b/Source/ang16.hpp
  
      // inlined from 0x40f580 on v9.6f
      // I was tempted to put this on the Fix16 header, but that will create a circular dependency...
-@@ -329,7 +329,7 @@
+@@ -329,7 +329,7 @@ class Ang16
      }
  
      // 9.6f func: 0x401C40
@@ -2158,7 +2323,7 @@ diff -ruN a/Source/ang16.hpp b/Source/ang16.hpp
      {
          rValue = value.ToInt();
          Normalize();
-@@ -396,7 +396,7 @@
+@@ -396,7 +396,7 @@ class Ang8
  
  inline void __stdcall RotateAndTranslatePoint_42A720(Fix16& pInX,
                                                           Fix16& pInY,
@@ -2167,9 +2332,10 @@ diff -ruN a/Source/ang16.hpp b/Source/ang16.hpp
                                                           Fix16& pTransX,
                                                           Fix16& pTransY,
                                                           Fix16& pRotTransX,
-diff -ruN a/Source/cSampleManager.cpp b/Source/cSampleManager.cpp
---- a/Source/cSampleManager.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/cSampleManager.cpp	2026-10-25 03:49:43.417778088 +0000
+diff --git a/Source/cSampleManager.cpp b/Source/cSampleManager.cpp
+index 13f9b85..cdf8def 100644
+--- a/Source/cSampleManager.cpp
++++ b/Source/cSampleManager.cpp
 @@ -3,6 +3,12 @@
  #include "Globals.hpp"
  #include <stdio.h>
@@ -2183,7 +2349,7 @@ diff -ruN a/Source/cSampleManager.cpp b/Source/cSampleManager.cpp
  DEFINE_GLOBAL(cSampleManager, gSampManager_6FFF00, 0x6FFF00);
  
  struct voc_name
-@@ -173,7 +179,11 @@
+@@ -173,7 +179,11 @@ cSampleManager::cSampleManager()
  
          char_type FileName[80];
          strcpy(FileName, field_5_str);
@@ -2195,7 +2361,7 @@ diff -ruN a/Source/cSampleManager.cpp b/Source/cSampleManager.cpp
  
          FILE* hFile = fopen(FileName, "rb");
          if (hFile)
-@@ -224,6 +234,24 @@
+@@ -224,6 +234,24 @@ MATCH_FUNC(0x58D6C0)
  char_type cSampleManager::SoundInit_58D6C0(s32* a2)
  {
      AIL_startup();
@@ -2220,7 +2386,7 @@ diff -ruN a/Source/cSampleManager.cpp b/Source/cSampleManager.cpp
  
      if (!OpenDigitalDriver_58D720(1, field_2714_bUnknown, 22050))
      {
-@@ -294,7 +322,11 @@
+@@ -294,7 +322,11 @@ char_type cSampleManager::OpenDigitalDriver_58D720(char_type a2, char_type a3, s
  
      AllocSample_58DA80();
  
@@ -2232,7 +2398,7 @@ diff -ruN a/Source/cSampleManager.cpp b/Source/cSampleManager.cpp
      if (!field_1EA8_pAudioBuffer1)
      {
          ReleaseSample_58DAC0();
-@@ -496,7 +528,9 @@
+@@ -496,7 +528,9 @@ void cSampleManager::Shutdown_58DB30()
      Reset3DSamples_58D960();
      Terminate_58DAE0();
  
@@ -2242,7 +2408,7 @@ diff -ruN a/Source/cSampleManager.cpp b/Source/cSampleManager.cpp
      field_1EA8_pAudioBuffer1 = 0;
      field_1EAC_pAudioBuffer2 = 0;
      AIL_waveOutClose(field_0_hDriver);
-@@ -1153,8 +1187,30 @@
+@@ -1153,8 +1187,30 @@ char_type cSampleManager::LoadWavSdtData_58E980(const char_type* pRawOrSdtName)
          return 0;
      }
  
@@ -2273,16 +2439,17 @@ diff -ruN a/Source/cSampleManager.cpp b/Source/cSampleManager.cpp
      fclose(hRawFile_);
      hSdtFile = fopen(sdtName, "rb");
      if (!hSdtFile)
-diff -ruN a/Source/char.cpp b/Source/char.cpp
---- a/Source/char.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/char.cpp	2026-10-25 03:49:34.141777850 +0000
+diff --git a/Source/char.cpp b/Source/char.cpp
+index 9371c2b..04bfd78 100644
+--- a/Source/char.cpp
++++ b/Source/char.cpp
 @@ -1,3 +1,5 @@
 +#include "n64_population.h"
 +#include <stdio.h>
  #define FIX16_POINT_ZERO kFP16Zero_6FD9E4
  #include "ped_death_cause.hpp"
  #include "ped_jump_over_mode.hpp"
-@@ -4605,7 +4607,7 @@
+@@ -4605,7 +4607,7 @@ static inline s32 IsOnSlopeBlock(gmp_block_info* pBlock)
  
  // MaxAbsDistance_42A6B0 as state_1_5504F0 inlines it: past the nested inline budget, Max is the named
  // out-of-line copy Max_44E540 (as in Weapon_30's MaxAbsDistance_5DF270)
@@ -2291,10 +2458,11 @@ diff -ruN a/Source/char.cpp b/Source/char.cpp
  {
      Fix16 diff_x;
      diff_x = x2 - x1;
-diff -ruN a/Source/char.hpp b/Source/char.hpp
---- a/Source/char.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/char.hpp	2026-10-20 18:36:40.265368500 +0000
-@@ -208,7 +208,7 @@
+diff --git a/Source/char.hpp b/Source/char.hpp
+index 04749c3..60da66b 100644
+--- a/Source/char.hpp
++++ b/Source/char.hpp
+@@ -208,7 +208,7 @@ class Char_B4
      }
  
      // strange, the same 9.6f func but Ped::ChaseTargetStateMachine_46B170 only matches if it pass by ref
@@ -2303,10 +2471,11 @@ diff -ruN a/Source/char.hpp b/Source/char.hpp
      {
          if (field_38_velocity < threshold)
          {
-diff -ruN a/Source/crt_stubs.cpp b/Source/crt_stubs.cpp
---- a/Source/crt_stubs.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/crt_stubs.cpp	2026-10-20 18:36:36.981403500 +0000
-@@ -7,7 +7,15 @@
+diff --git a/Source/crt_stubs.cpp b/Source/crt_stubs.cpp
+index 48660a4..44e2365 100644
+--- a/Source/crt_stubs.cpp
++++ b/Source/crt_stubs.cpp
+@@ -7,7 +7,15 @@ namespace crt
  STUB_FUNC(0x5ED3BB)
  void* __cdecl malloc(size_t Size)
  {
@@ -2322,10 +2491,11 @@ diff -ruN a/Source/crt_stubs.cpp b/Source/crt_stubs.cpp
  }
  
  STUB_FUNC(0x5ED478)
-diff -ruN a/Source/error.cpp b/Source/error.cpp
---- a/Source/error.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/error.cpp	2026-10-20 18:36:40.066136000 +0000
-@@ -45,7 +45,9 @@
+diff --git a/Source/error.cpp b/Source/error.cpp
+index c8a2b0f..2e3fa8f 100644
+--- a/Source/error.cpp
++++ b/Source/error.cpp
+@@ -45,7 +45,9 @@ void ErrorLog::Open_4D9470(const char_type* path, s32 a3)
              break;
      }
  
@@ -2336,7 +2506,7 @@ diff -ruN a/Source/error.cpp b/Source/error.cpp
      ((ofstream&)field_0_ofstr).open(path, mode, filebuf::openprot);
  #endif
  
-@@ -64,27 +66,39 @@
+@@ -64,27 +66,39 @@ ErrorLog::ErrorLog(const char* FileName, int a3)
  MATCH_FUNC(0x4D9690)
  EXPORT void __cdecl log_on_line_written_cb_4D9690(void* a1)
  {
@@ -2376,9 +2546,10 @@ diff -ruN a/Source/error.cpp b/Source/error.cpp
  }
  
  MATCH_FUNC(0x4D9540)
-diff -ruN a/Source/error.hpp b/Source/error.hpp
---- a/Source/error.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/error.hpp	2026-10-20 18:36:40.080117100 +0000
+diff --git a/Source/error.hpp b/Source/error.hpp
+index 841ccd1..fcd87c7 100644
+--- a/Source/error.hpp
++++ b/Source/error.hpp
 @@ -3,7 +3,10 @@
  #include "Function.hpp"
  #include <windows.h>
@@ -2391,9 +2562,10 @@ diff -ruN a/Source/error.hpp b/Source/error.hpp
  #include <FSTREAM.H>
  #define ostream_type ostream
  #else
-diff -ruN a/Source/file.cpp b/Source/file.cpp
---- a/Source/file.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/file.cpp	2026-10-20 20:19:44.677538600 +0000
+diff --git a/Source/file.cpp b/Source/file.cpp
+index 0b01cdf..b55e57f 100644
+--- a/Source/file.cpp
++++ b/Source/file.cpp
 @@ -5,6 +5,7 @@
  #include "Globals.hpp"
  #include "crt_stubs.hpp"
@@ -2402,7 +2574,7 @@ diff -ruN a/Source/file.cpp b/Source/file.cpp
  #include <stdlib.h>
  #include "enums.hpp"
  
-@@ -82,7 +83,7 @@
+@@ -82,7 +83,7 @@ void __stdcall File::CheckReadOnlyFile_4A6BE0(const char_type* FileName, s32 exp
  }
  
  MATCH_FUNC(0x4A6C80)
@@ -2411,7 +2583,7 @@ diff -ruN a/Source/file.cpp b/Source/file.cpp
  {
      Error_SetName_4A0770(FileName);
      FILE* hFileRead1 = crt::fopen(FileName, "rb");
-@@ -131,7 +132,7 @@
+@@ -131,7 +132,7 @@ size_t __stdcall File::Read_4A6D90(void* Buffer, size_t ElementSize, size_t Elem
  
  // Reads the whole file into the caller's buffer, which holds at most *pMaxSize bytes
  MATCH_FUNC(0x4A6DB0)
@@ -2420,7 +2592,7 @@ diff -ruN a/Source/file.cpp b/Source/file.cpp
  {
      Error_SetName_4A0770(FileName);
      FILE* hFile = crt::fopen(FileName, "rb");
-@@ -161,7 +162,7 @@
+@@ -161,7 +162,7 @@ size_t __stdcall File::ReadFileToFixedBuffer_4A6DB0(const char_type* FileName, v
  }
  
  MATCH_FUNC(0x4A6E80)
@@ -2429,7 +2601,7 @@ diff -ruN a/Source/file.cpp b/Source/file.cpp
  {
      Error_SetName_4A0770(FileName);
      if (!*pBufferSize)
-@@ -194,7 +195,7 @@
+@@ -194,7 +195,7 @@ size_t __stdcall File::Write_4A6F30(void* Buffer, size_t ElementSize, size_t Ele
  }
  
  MATCH_FUNC(0x4A6F50)
@@ -2438,7 +2610,7 @@ diff -ruN a/Source/file.cpp b/Source/file.cpp
  {
      Error_SetName_4A0770(FileName);
      if (!*pBufferSize)
-@@ -237,6 +238,10 @@
+@@ -237,6 +238,10 @@ void __stdcall File::CreateFile_4A7000(const char_type* FileName)
      }
  }
  
@@ -2449,7 +2621,7 @@ diff -ruN a/Source/file.cpp b/Source/file.cpp
  MATCH_FUNC(0x4A7060)
  void __stdcall File::Global_Open_4A7060(const char_type* FileName)
  {
-@@ -254,7 +259,36 @@
+@@ -254,7 +259,36 @@ void __stdcall File::Global_Open_4A7060(const char_type* FileName)
      }
  
      gbGlobalFileOpen_67D160 = 1;
@@ -2486,10 +2658,11 @@ diff -ruN a/Source/file.cpp b/Source/file.cpp
  
  MATCH_FUNC(0x4A70C0)
  void __stdcall File::Global_Close_4A70C0()
-diff -ruN a/Source/file.hpp b/Source/file.hpp
---- a/Source/file.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/file.hpp	2026-10-20 18:36:40.121139200 +0000
-@@ -13,16 +13,16 @@
+diff --git a/Source/file.hpp b/Source/file.hpp
+index 8d3eba3..ce72ab4 100644
+--- a/Source/file.hpp
++++ b/Source/file.hpp
+@@ -13,16 +13,16 @@ class File
      EXPORT static bool __stdcall IsCdRomDrive_4A6BB0(char_type a1);
  
      EXPORT static void __stdcall CheckReadOnlyFile_4A6BE0(const char_type* FileName, s32 expectedSize);
@@ -2510,10 +2683,11 @@ diff -ruN a/Source/file.hpp b/Source/file.hpp
  
      EXPORT static void __stdcall CreateFile_4A7000(const char_type* FileName);
  
-diff -ruN a/Source/fix16.cpp b/Source/fix16.cpp
---- a/Source/fix16.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/fix16.cpp	2026-10-21 06:42:40.000000000 +0000
-@@ -91,7 +91,7 @@
+diff --git a/Source/fix16.cpp b/Source/fix16.cpp
+index c2dfe78..9656fe3 100644
+--- a/Source/fix16.cpp
++++ b/Source/fix16.cpp
+@@ -91,7 +91,7 @@ Fix16 Fix16::Negate_4086A0() const throw()
  }
  
  MATCH_FUNC(0x44E540)
@@ -2522,7 +2696,7 @@ diff -ruN a/Source/fix16.cpp b/Source/fix16.cpp
  {
      Fix16 result;
      if (pLhs.mValue > pRhs.mValue)
-@@ -115,7 +115,7 @@
+@@ -115,7 +115,7 @@ Fix16 Fix16::operator/(const Fix16& in)
  */
  
  MATCH_FUNC(0x436A50)
@@ -2531,7 +2705,7 @@ diff -ruN a/Source/fix16.cpp b/Source/fix16.cpp
  {
      if (input.mValue > 0)
      {
-@@ -128,7 +128,7 @@
+@@ -128,7 +128,7 @@ Fix16 __stdcall Fix16::Abs_436A50(Fix16& input)
  }
  
  MATCH_FUNC(0x436A70)
@@ -2540,7 +2714,7 @@ diff -ruN a/Source/fix16.cpp b/Source/fix16.cpp
  {
      return Fix16(sqrt(input.AsDouble()));
  }
-@@ -136,7 +136,7 @@
+@@ -136,7 +136,7 @@ Fix16 __stdcall Fix16::SquareRoot_436A70(Fix16& input)
  // 10.5 https://decomp.me/scratch/7a41K
  // 9.6f https://decomp.me/scratch/ZkUbq
  MATCH_FUNC(0x405320)
@@ -2549,10 +2723,11 @@ diff -ruN a/Source/fix16.cpp b/Source/fix16.cpp
  {
      Ang16 v9;
      if (y == kFPZero_6691B0)
-diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
---- a/Source/fix16.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/fix16.hpp	2026-10-20 19:12:20.946221200 +0000
-@@ -20,7 +20,7 @@
+diff --git a/Source/fix16.hpp b/Source/fix16.hpp
+index 7caca6f..bb325a7 100644
+--- a/Source/fix16.hpp
++++ b/Source/fix16.hpp
+@@ -20,7 +20,7 @@ class Fix16
  {
    public:
      // 9.6f func
@@ -2561,7 +2736,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      {
          s32 v = a1.mValue;
          return (v + 0x2000) >> 14;
-@@ -81,7 +81,7 @@
+@@ -81,7 +81,7 @@ class Fix16
          return *this;
      }
  
@@ -2570,7 +2745,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      {
          s32 value = mValue + in.mValue;
          return Fix16(value, 0);
-@@ -236,11 +236,18 @@
+@@ -236,11 +236,18 @@ class Fix16
          mValue = value << 14;
      }
  
@@ -2591,7 +2766,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      {
      }
  
-@@ -326,22 +333,22 @@
+@@ -326,22 +333,22 @@ class Fix16
      // inline budget charges the front-end size, 48 here (41 without the local, 46 with a non-const one).
      // Car_BC::ApplyExplosionImpulse_443710 needs >= 48 and CarPhysics_B0::EnforceGearSensitiveMaxSpeed_562D00
      // <= 49; with GetLength_41E260 at 162, Crane_15C::ComputeHookPolar_47F6C0 needs >= 48 too.
@@ -2618,7 +2793,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      {
          if (a > b)
          {
-@@ -352,8 +359,8 @@
+@@ -352,8 +359,8 @@ class Fix16
              return b;
          }
      }
@@ -2629,7 +2804,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      // throw(): the original calls these out-of-line copies without an EH frame (their inline
      // bodies were visible there), see CarPhysics_B0::UpdateReferencePoint_563460
      // Out-of-line copy of operator+ (0x408660)
-@@ -372,7 +379,7 @@
+@@ -372,7 +379,7 @@ class Fix16
      EXPORT Fix16 Negate_4086A0() const throw();
  
      // Needed this for a GetLength variant used by miss2_0x11C::GetSpeed_50E190.
@@ -2638,7 +2813,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      {
          if (input.mValue > 0)
          {
-@@ -383,7 +390,7 @@
+@@ -383,7 +390,7 @@ class Fix16
      }
  
      //MATCH_FUNC(0x436A20)
@@ -2647,7 +2822,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      {
          s32 value = (s32)(((__int64)mValue << 14) / in.mValue);
          return Fix16(value, 0);
-@@ -392,7 +399,7 @@
+@@ -392,7 +399,7 @@ class Fix16
      // Inlined from 9.6f at 0x401bf0
      // I am not fully sure if this is right, i.e. the s32 parameter, instead of Fix16.
      // But I couldn't match ObjectDefinition_74::SetDimensionsFromSprite_533090 without this overload.
@@ -2656,7 +2831,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      {
          s32 value = mValue / in;
          return Fix16(value, 0);
-@@ -421,7 +428,7 @@
+@@ -421,7 +428,7 @@ class Fix16
      }
  
      // https://decomp.me/scratch/MqQPJ
@@ -2665,7 +2840,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      {
          Fix16 diff_x;
          diff_x = x2 - x1;
-@@ -437,7 +444,7 @@
+@@ -437,7 +444,7 @@ class Fix16
      EXPORT static Fix16 __stdcall ClampToRangeFlexible_ool_55EEE0(Fix16& a2, Fix16& a3, Fix16& a4);
  
      // NOTE: 10.5 function - matched but inlined
@@ -2674,7 +2849,7 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
      {
          if (a2 > a3)
          {
-@@ -489,7 +496,7 @@
+@@ -489,7 +496,7 @@ class Fix16
          return Fix16(mValue + 0x4000, 0);
      }
  
@@ -2683,9 +2858,10 @@ diff -ruN a/Source/fix16.hpp b/Source/fix16.hpp
  
    public:
      s32 mValue;
-diff -ruN a/Source/gbh_graphics.hpp b/Source/gbh_graphics.hpp
---- a/Source/gbh_graphics.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/gbh_graphics.hpp	2026-10-20 18:36:35.771390000 +0000
+diff --git a/Source/gbh_graphics.hpp b/Source/gbh_graphics.hpp
+index b558ece..54217bb 100644
+--- a/Source/gbh_graphics.hpp
++++ b/Source/gbh_graphics.hpp
 @@ -6,7 +6,7 @@
  // and with it VC6 drops the EH frame of destructors that delete through an inline destructor
  // (Door_4D4::~Door_4D4). The original TUs had no STL there, so unless a TU already has <set>/<vector>, their
@@ -2695,10 +2871,11 @@ diff -ruN a/Source/gbh_graphics.hpp b/Source/gbh_graphics.hpp
  #define _SET_
  #define _VECTOR_
  namespace std
-diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
---- a/Source/gtx_0x106C.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/gtx_0x106C.cpp	2026-10-21 01:09:25.983242800 +0000
-@@ -24,6 +24,11 @@
+diff --git a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
+index 649de5d..6b4fa10 100644
+--- a/Source/gtx_0x106C.cpp
++++ b/Source/gtx_0x106C.cpp
+@@ -24,6 +24,11 @@ DEFINE_GLOBAL(s16, word_703BAA, 0x703BAA);
  DEFINE_GLOBAL(s16, word_703D98, 0x703D98);
  DEFINE_GLOBAL(s16, word_703C9C, 0x703C9C);
  
@@ -2710,7 +2887,7 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
  MATCH_FUNC(0x5AA3B0)
  car_info* gtx_0x106C::get_car_info_5AA3B0(u8 idx)
  {
-@@ -652,6 +657,15 @@
+@@ -652,6 +657,15 @@ void gtx_0x106C::load_delta_store_5AADD0(u32 dels_chunk_size)
  MATCH_FUNC(0x5AADF0)
  void gtx_0x106C::load_tiles_5AADF0(u32 tile_chunk_len)
  {
@@ -2726,7 +2903,7 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
      field_3C_tiles = (u8*)Memory::Aligned_malloc_4FE510(tile_chunk_len, &field_44_aligned_tiles_size);
      File::Global_Read_4A71C0(field_3C_tiles, tile_chunk_len);
      InitTileMapping_5AA950();
-@@ -672,6 +686,14 @@
+@@ -672,6 +686,14 @@ void gtx_0x106C::skip_psxt_5AAE30(u32 a1)
  MATCH_FUNC(0x5AAE40)
  void gtx_0x106C::load_sprite_graphics_5AAE40(u32 sprg_chunk_len)
  {
@@ -2741,7 +2918,7 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
      field_34_sprite_graphics = reinterpret_cast<BYTE*>(Memory::Aligned_malloc_4FE510(sprg_chunk_len, &field_38_sprite_graphics_unaligned));
      File::Global_Read_4A71C0(field_34_sprite_graphics, sprg_chunk_len);
  }
-@@ -679,6 +701,16 @@
+@@ -679,6 +701,16 @@ void gtx_0x106C::load_sprite_graphics_5AAE40(u32 sprg_chunk_len)
  MATCH_FUNC(0x5AAE70)
  void gtx_0x106C::load_physical_palettes_5AAE70(u32 ppal_chunk_size)
  {
@@ -2758,7 +2935,7 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
      field_2C_physical_palettes = Memory::Aligned_malloc_4FE510(ppal_chunk_size, &field_30_physical_palettes_size);
      File::Global_Read_4A71C0(field_2C_physical_palettes, ppal_chunk_size);
      field_8_physical_palettes_len = ppal_chunk_size >> 10;
-@@ -1216,6 +1248,24 @@
+@@ -1216,6 +1248,24 @@ void sprite_delta::Delta_5ABA00(u8* pArray)
  {
      // Inline asm in the original (lodsw, rep movsb). Each entry is a u16 offset from the end
      // of the previous run, a u8 length and that many bytes.
@@ -2783,7 +2960,7 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
      sprite_delta* pThis = this;
      __asm
      {
-@@ -1239,6 +1289,7 @@
+@@ -1239,6 +1289,7 @@ void sprite_delta::Delta_5ABA00(u8* pArray)
          pop esi
          pop edi
      }
@@ -2791,7 +2968,7 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
  }
  
  // https://decomp.me/scratch/Cc0Dx Not fully working
-@@ -1246,6 +1297,31 @@
+@@ -1246,6 +1297,31 @@ MATCH_FUNC(0x5ABA40)
  void sprite_delta::Delta_5ABA40(u8* pArray, u32 width)
  {
      // Inline asm in the original (lodsw / loop)
@@ -2823,7 +3000,7 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
      // Each entry: u16 offset, u8 len, then len bytes written backwards from the end of the row
      __asm
      {
-@@ -1283,6 +1359,7 @@
+@@ -1283,6 +1359,7 @@ void sprite_delta::Delta_5ABA40(u8* pArray, u32 width)
          pop esi
          pop edi
      }
@@ -2831,7 +3008,7 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
  }
  
  MATCH_FUNC(0x5abaa0)
-@@ -1297,6 +1374,9 @@
+@@ -1297,6 +1374,9 @@ void sprite_index::ClearPixelsOfColour_5ABAA0(u8 clear_target)
  MATCH_FUNC(0x5ABAE0)
  void __stdcall ClearPixelsOfColourInRow_5ABAE0(u8* pData, int width, u8 clear_target)
  {
@@ -2841,7 +3018,7 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
      u8* pDataIter = pData;
      for (s32 i = 0; i < width; i++)
      {
-@@ -1314,6 +1394,10 @@
+@@ -1314,6 +1394,10 @@ void sprite_index::CopyPixels_5ABB00(u8* src)
      for (s32 ypos = 0; ypos < field_5_height; ypos++)
      {
          s32 idx = ypos << 8;
@@ -2853,10 +3030,11 @@ diff -ruN a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
      }
  }
 \ No newline at end of file
-diff -ruN a/Source/map_0x370.cpp b/Source/map_0x370.cpp
---- a/Source/map_0x370.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/map_0x370.cpp	2026-10-21 06:42:40.000000000 +0000
-@@ -4724,7 +4724,8 @@
+diff --git a/Source/map_0x370.cpp b/Source/map_0x370.cpp
+index 0eef09d..3c61452 100644
+--- a/Source/map_0x370.cpp
++++ b/Source/map_0x370.cpp
+@@ -4724,7 +4724,8 @@ void Map_0x370::load_chunk_4E94B0(const char_type* pChunkType, size_t chunkLen)
      }
      else
      {
@@ -2866,9 +3044,34 @@ diff -ruN a/Source/map_0x370.cpp b/Source/map_0x370.cpp
      }
  }
  
-diff -ruN a/Source/n64_population.h b/Source/n64_population.h
---- a/Source/n64_population.h	1970-01-01 00:00:00.000000000 +0000
-+++ b/Source/n64_population.h	2026-10-25 03:49:34.136777850 +0000
+diff --git a/Source/memory.cpp b/Source/memory.cpp
+index 77547b6..e2d599b 100644
+--- a/Source/memory.cpp
++++ b/Source/memory.cpp
+@@ -20,6 +20,18 @@ void* __stdcall Memory::malloc_4FE4D0(size_t Size)
+ MATCH_FUNC(0x4FE510)
+ void* __stdcall Memory::Aligned_malloc_4FE510(s32 requestedSize, void** pUnAlignedPtr)
+ {
++#ifdef N64
++    {
++    // N64: alinhamento de 64 bytes (linha de cache/DMA) basta; o original pedia 64 KB extras por alocacao (heap de ~6 MB).
++    void* pAlloc = crt::malloc(requestedSize + 0x40);
++    *pUnAlignedPtr = pAlloc;
++    if (!pAlloc)
++    {
++        FatalError_4A38C0(Gta2Error::OutOfMemory, "C:\\Splitting\\Gta2\\Source\\Memory.cpp", 76, requestedSize + 0x40);
++    }
++    return (void*)(((u32)pAlloc + 0x3F) & ~0x3Fu);
++    }
++#endif
+     // Allocate with extra space for alignment
+     void* pAlloc = crt::malloc(requestedSize + 0x10000);
+ 
+diff --git a/Source/n64_population.h b/Source/n64_population.h
+new file mode 100644
+index 0000000..10defd3
+--- /dev/null
++++ b/Source/n64_population.h
 @@ -0,0 +1,32 @@
 +#pragma once
 +// Populacao do tech demo N64: percentual da quantidade ORIGINAL de pedestres e carros (100 = igual ao PC).
@@ -2902,9 +3105,10 @@ diff -ruN a/Source/n64_population.h b/Source/n64_population.h
 +#define N64_TETO_PARTICULAS      100000
 +#endif
 +
-diff -ruN a/Source/ped_flags.hpp b/Source/ped_flags.hpp
---- a/Source/ped_flags.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/ped_flags.hpp	2026-10-20 22:39:38.694192200 +0000
+diff --git a/Source/ped_flags.hpp b/Source/ped_flags.hpp
+index 842e137..34b403b 100644
+--- a/Source/ped_flags.hpp
++++ b/Source/ped_flags.hpp
 @@ -6,6 +6,41 @@
  // each bit. Bits marked "Flag" are used but their meaning is not understood yet, "Unused" bits are only reset / copied.
  struct PedFlags32
@@ -2947,7 +3151,7 @@ diff -ruN a/Source/ped_flags.hpp b/Source/ped_flags.hpp
      u32 bActive : 1; // bit 0
      u32 bUnused1 : 1; // bit 1
      u32 bPanicking : 1; // bit 2
-@@ -38,11 +73,23 @@
+@@ -38,11 +73,23 @@ struct PedFlags32
      u32 bForcedOutOfTaxi : 1; // bit 29
      u32 bUnused30 : 1; // bit 30
      u32 bUnused31 : 1; // bit 31
@@ -2971,7 +3175,7 @@ diff -ruN a/Source/ped_flags.hpp b/Source/ped_flags.hpp
      u8 bUnused0 : 1; // bit 0
      u8 bUnused1 : 1; // bit 1
      u8 bCollidedWithPed : 1; // bit 2
-@@ -51,6 +98,7 @@
+@@ -51,6 +98,7 @@ struct PedFlags8
      u8 bDropsWeaponOnDeath : 1; // bit 5
      u8 bUnused6 : 1; // bit 6
      u8 bUnused7 : 1; // bit 7
@@ -2979,9 +3183,11 @@ diff -ruN a/Source/ped_flags.hpp b/Source/ped_flags.hpp
  };
  
  // Bit indices of Ped::field_21C for BitSet32::check_bit
-diff -ruN a/Source/port_static_init.cpp b/Source/port_static_init.cpp
---- a/Source/port_static_init.cpp	1970-01-01 00:00:00.000000000 +0000
-+++ b/Source/port_static_init.cpp	2026-10-20 18:36:37.101161700 +0000
+diff --git a/Source/port_static_init.cpp b/Source/port_static_init.cpp
+new file mode 100644
+index 0000000..28b95cd
+--- /dev/null
++++ b/Source/port_static_init.cpp
 @@ -0,0 +1,48 @@
 +// Browser port: run-time replacements for the original executable's static
 +// initialisers (its C runtime start-up, _cinit, built these tables before
@@ -3031,15 +3237,17 @@ diff -ruN a/Source/port_static_init.cpp b/Source/port_static_init.cpp
 +    Init_Unk_Width_Height_F16_array();
 +    Init_InputRecorder();
 +}
-diff -ruN a/Source/sprite.cpp b/Source/sprite.cpp
---- a/Source/sprite.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/sprite.cpp	2026-10-25 03:49:34.138777850 +0000
-@@ -27,9 +27,12 @@
+diff --git a/Source/sprite.cpp b/Source/sprite.cpp
+index 968482a..e6ff31f 100644
+--- a/Source/sprite.cpp
++++ b/Source/sprite.cpp
+@@ -27,9 +27,13 @@
  #include "root_sound.hpp"
  #include "TextureCache_15D8.hpp"
  #include "winmain.hpp" // TODO: only because of gLighting_626A09
 +#ifdef N64
 +#include "ObjectDefinitions_8CA8.hpp"
++#include "render/n64tex.h"
 +#endif
  
  // Forward declarations: the functions below are in address order
@@ -3048,7 +3256,7 @@ diff -ruN a/Source/sprite.cpp b/Source/sprite.cpp
  static inline void ProjectToScreen_5A5690(Fix16 x, Fix16 y, Fix16 z, Fix16* pOut1, Fix16* pOut2);
  EXTERN_GLOBAL(u16, gDebugColour_626260);
  
-@@ -421,7 +424,7 @@
+@@ -421,7 +425,7 @@ s16 CarFlags::Delta_48F8B0(u16& sprite_idx, u8& bRet, const u16& a4, const u32&
  }
  
  MATCH_FUNC(0x4F76A0)
@@ -3057,7 +3265,7 @@ diff -ruN a/Source/sprite.cpp b/Source/sprite.cpp
  {
  
      // Raw compares: with Fix16 operators VC6 runs out of inline budget and calls the Fix16_Point ctor
-@@ -458,7 +461,7 @@
+@@ -458,7 +462,7 @@ EXPORT char_type __stdcall ComputeScanlineIntersectionY_4F76A0(Fix16& minX, Fix1
  }
  
  MATCH_FUNC(0x4F77D0)
@@ -3066,7 +3274,7 @@ diff -ruN a/Source/sprite.cpp b/Source/sprite.cpp
  {
  
      // Same shape as ComputeScanlineIntersectionY_4F76A0, same leftover diff.
-@@ -876,9 +879,9 @@
+@@ -876,9 +880,9 @@ void Sprite::SetDefaultNumBySpriteType_59E960()
  }
  
  // RotateAndTranslatePoint_42A720 with the out-of-line Fix16 operator copies
@@ -3079,7 +3287,7 @@ diff -ruN a/Source/sprite.cpp b/Source/sprite.cpp
                                                                  Fix16& pTransX,
                                                                  Fix16& pTransY,
                                                                  Fix16& pRotTransX,
-@@ -958,7 +961,7 @@
+@@ -958,7 +962,7 @@ s16 Sprite::GetTruePalette_59EAA0()
  // inline expansions: the unary minus is the out-of-line copy (Negate_4086A0)
  static inline void __stdcall RotateAndTranslatePoint_NegOOL_42A720(Fix16& pInX,
                                                                    Fix16& pInY,
@@ -3088,7 +3296,31 @@ diff -ruN a/Source/sprite.cpp b/Source/sprite.cpp
                                                                    Fix16& pTransX,
                                                                    Fix16& pTransY,
                                                                    Fix16& pRotTransX,
-@@ -2669,7 +2672,7 @@
+@@ -1202,6 +1206,23 @@ void Sprite::Draw_59EFF0()
+         }
+     }
+ 
++#ifdef N64
++    // N64: o icone da gangue (objetos 287..293, anexado ao carro) e' um sprite com o formato do carro todo pintado com o indice 1
++    // (tinta lisa) e so a logo por cima. Opaco, ele cobre o carro inteiro (carro "vermelho e sem textura"): so a logo deve aparecer.
++    {
++        const s32 t = field_30_sprite_type_enum;
++        if ((t == sprite_types_enum::code_obj1_4 || t == sprite_types_enum::map_obj_5 || t == sprite_types_enum::unknown_1) && field_8_object_2C_ptr &&
++            field_8_object_2C_ptr->field_18_model >= objects::loonies_icon_287 && field_8_object_2C_ptr->field_18_model <= objects::russian_mafia_icon_293)
++        {
++            N64Tex* nt = reinterpret_cast<N64Tex*>(pTexture->field_1C_ptr);
++            if (nt && !nt->key1)
++            {
++                nt->key1 = 1;
++                nt->gen++;
++            }
++        }
++    }
++#endif
+     if (Sprite::has_shadows_59EAE0())
+     {
+         Vert pShadowVerts[4]; // length 4? strange
+@@ -2669,7 +2690,7 @@ Sprite_8::Sprite_8()
  }
  
  MATCH_FUNC(0x5A5AA0)
@@ -3097,7 +3329,7 @@ diff -ruN a/Source/sprite.cpp b/Source/sprite.cpp
  {
      outX = (Ang16::cosine_40F520(angle) * (xpos1 - xpos2)) + (Ang16::sine_40F500(angle) * (ypos1 - ypos2));
      outY = (Ang16::sine_40F500(angle) * (xpos2 - xpos1)) + (Ang16::cosine_40F520(angle) * (ypos1 - ypos2));
-@@ -2764,6 +2767,16 @@
+@@ -2764,6 +2785,16 @@ bool Sprite_18::PoolUpdate_5A6910(Sprite* a2)
          {
              Char_B4* cB4 = field_0->AsCharB4_40FEA0();
              bRet = 0;
@@ -3114,10 +3346,11 @@ diff -ruN a/Source/sprite.cpp b/Source/sprite.cpp
              cB4->Update_545720(kFP16Zero_703A38);
          }
      }
-diff -ruN a/Source/sprite.hpp b/Source/sprite.hpp
---- a/Source/sprite.hpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/sprite.hpp	2026-10-21 00:11:18.925067700 +0000
-@@ -16,8 +16,8 @@
+diff --git a/Source/sprite.hpp b/Source/sprite.hpp
+index 263f693..ccb0ec8 100644
+--- a/Source/sprite.hpp
++++ b/Source/sprite.hpp
+@@ -16,8 +16,8 @@ EXTERN_GLOBAL_ARRAY(Vert, gTileVerts_7036D0, 8);
  
  EXTERN_GLOBAL(Fix16, gFix16_7035C0);
  
@@ -3128,7 +3361,7 @@ diff -ruN a/Source/sprite.hpp b/Source/sprite.hpp
  
  class Car_BC;
  class Char_B4;
-@@ -744,6 +744,13 @@
+@@ -744,6 +744,13 @@ class Sprite_18_Pool
      PoolBasic<Sprite_18, 300> field_0_pool;
  };
  
@@ -3142,7 +3375,7 @@ diff -ruN a/Source/sprite.hpp b/Source/sprite.hpp
  class Sprite_4C_Pool
  {
    public:
-@@ -766,7 +773,7 @@
+@@ -766,7 +773,7 @@ class Sprite_4C_Pool
          return field_0_pool.Allocate();
      }
  
@@ -3151,7 +3384,7 @@ diff -ruN a/Source/sprite.hpp b/Source/sprite.hpp
  };
  
  class Sprite_Pool
-@@ -797,9 +804,11 @@
+@@ -797,9 +804,11 @@ class Sprite_Pool
          return field_0_pool.field_0_pHead != NULL;
      }
  
@@ -3164,22 +3397,27 @@ diff -ruN a/Source/sprite.hpp b/Source/sprite.hpp
  
  EXTERN_GLOBAL(Sprite_8*, gSprite_8_703820);
  
-diff -ruN a/Source/text_0x14.cpp b/Source/text_0x14.cpp
---- a/Source/text_0x14.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/text_0x14.cpp	2026-10-25 02:10:39.897033900 +0000
-@@ -177,6 +177,19 @@
+diff --git a/Source/text_0x14.cpp b/Source/text_0x14.cpp
+index 78c7432..3c0be87 100644
+--- a/Source/text_0x14.cpp
++++ b/Source/text_0x14.cpp
+@@ -177,6 +177,23 @@ u16 text_0x14::ToUpper_5B5AD0(wchar_t a2)
              }
              break;
  
 +#ifdef N64
-+        case 'p': // portugues: a-z e letras acentuadas minusculas (0xE0-0xFE, menos 0xF7) viram maiusculas
++        case 'p': // portugues: o .gxt guarda as acentuadas como codigos de glifo da fonte: minusculas 151..172 -> maiusculas 128..149, n com til 174 -> 173
 +            if (a2 >= 'a' && a2 <= 'z')
 +            {
 +                return a2 - ' ';
 +            }
-+            if (a2 >= 0xE0 && a2 <= 0xFE && a2 != 0xF7)
++            if (a2 >= 151 && a2 <= 172)
 +            {
-+                return a2 - 0x20;
++                return a2 - 23;
++            }
++            if (a2 == 174)
++            {
++                return 173;
 +            }
 +            break;
 +#endif
@@ -3187,12 +3425,15 @@ diff -ruN a/Source/text_0x14.cpp b/Source/text_0x14.cpp
          case 'f':
              if (a2 >= 'a' && a2 <= 'z')
              {
-@@ -395,13 +408,17 @@
+@@ -395,13 +412,20 @@ bool text_0x14::KeyExists_5B5FA0(const char_type* pIdStr)
      return TKeyFind_5B59E0(pIdStr);
  }
  
 +#ifdef N64
-+char gN64Language = 'e'; // idioma escolhido na pagina de Opcoes ('e' ingles, 's' espanhol, 'p' portugues); vale no menu e no jogo
++#ifndef N64_LANG_DEFAULT
++#define N64_LANG_DEFAULT 'e' // 'e' ingles, 's' espanhol, 'p' portugues (so para testes: o jogo troca o idioma na pagina de Opcoes)
++#endif
++char gN64Language = N64_LANG_DEFAULT; // idioma escolhido na pagina de Opcoes ('e' ingles, 's' espanhol, 'p' portugues); vale no menu e no jogo
 +#endif
 +
  MATCH_FUNC(0x5B5FB0)
@@ -3206,7 +3447,7 @@ diff -ruN a/Source/text_0x14.cpp b/Source/text_0x14.cpp
      {
          field_10_lang_code = gTmpBuffer_67C598[0];
      }
-@@ -409,6 +426,9 @@
+@@ -409,6 +433,9 @@ text_0x14::text_0x14()
      {
          field_10_lang_code = 'e';
      }
@@ -3216,10 +3457,11 @@ diff -ruN a/Source/text_0x14.cpp b/Source/text_0x14.cpp
  }
  
  // Only gets its EH frame when <new> isn't included, see Globals.hpp
-diff -ruN a/Source/winmain.cpp b/Source/winmain.cpp
---- a/Source/winmain.cpp	2026-10-12 07:13:53.000000000 +0000
-+++ b/Source/winmain.cpp	2026-10-25 03:49:34.143777850 +0000
-@@ -1560,6 +1560,11 @@
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index a150294..e1b9ac6 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -1560,6 +1560,11 @@ GUID IID_IDirectDrawSurface4_ = {0x0B2B8630, 0xAD35, 0x11D0, 0x8E, 0xA6, 0x00, 0
  MATCH_FUNC(0x4C4EC0)
  EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind)
  {
@@ -3231,7 +3473,7 @@ diff -ruN a/Source/winmain.cpp b/Source/winmain.cpp
      HMODULE hDInput; // eax
      FARPROC pDirectInputCreateA; // ebx
      HMODULE hDDraw; // eax
-@@ -1728,6 +1733,7 @@
+@@ -1728,6 +1733,7 @@ EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind)
      {
          *pDXVer = 0x601;
      }
@@ -3239,7 +3481,7 @@ diff -ruN a/Source/winmain.cpp b/Source/winmain.cpp
  }
  
  const char_type* kDefaultDllNames_626A00[2] = {"d3ddll.dll", "dmavideo.dll"};
-@@ -1923,6 +1929,10 @@
+@@ -1923,6 +1929,10 @@ EXPORT void __stdcall ParseCommandLine_4DA320(char_type* pCommandLine)
  MATCH_FUNC(0x5E4DE0)
  EXPORT void Start_GTA2Manager_5E4DE0()
  {
@@ -3250,7 +3492,7 @@ diff -ruN a/Source/winmain.cpp b/Source/winmain.cpp
      ShowWindow(gHwnd_707F04, SW_SHOWMINNOACTIVE);
      HANDLE hMutex = OpenMutexA(MUTEX_ALL_ACCESS, 0, "GBH_BOB_MUTEX");
      if (hMutex)
-@@ -2227,6 +2237,13 @@
+@@ -2227,6 +2237,13 @@ EXPORT LRESULT __stdcall WindowProc_5E4EE0(HWND hWnd, UINT Msg, WPARAM wParam, L
  }
  
  MATCH_FUNC(0x5E53F0)
@@ -3264,7 +3506,7 @@ diff -ruN a/Source/winmain.cpp b/Source/winmain.cpp
  s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, s32 nShowCmd)
  {
      //hInstance_ = hInstance;
-@@ -2347,6 +2364,10 @@
+@@ -2347,6 +2364,10 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
          gRegistry_6FF968.Clear_Or_Delete_Sound_Setting_586BF0("do_3d_sound", gRoot_sound_66B038.Get3DSound_40F180());
      }
  
@@ -3275,7 +3517,7 @@ diff -ruN a/Source/winmain.cpp b/Source/winmain.cpp
      u8 bQuit = 0; //  %bl
  
      while (1)
-@@ -2510,6 +2531,185 @@
+@@ -2510,6 +2531,185 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
      return 0;
  }
  
@@ -3461,7 +3703,7 @@ diff -ruN a/Source/winmain.cpp b/Source/winmain.cpp
  // TODO: order
  MATCH_FUNC(0x4DA740)
  EXPORT void __stdcall Shutdown_4DA740()
-@@ -2626,6 +2826,11 @@
+@@ -2626,6 +2826,11 @@ EXPORT char_type __stdcall Start_NetworkGame_5E5A30(HINSTANCE hInstance)
  MATCH_FUNC(0x5E5D60)
  EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
  {
@@ -3473,7 +3715,7 @@ diff -ruN a/Source/winmain.cpp b/Source/winmain.cpp
      DWORD dwHandle;
      DWORD dwSize = GetFileVersionInfoSizeA("GTA2.EXE", &dwHandle);
      BYTE* pAlloc = new BYTE[dwSize];
-@@ -2639,4 +2844,5 @@
+@@ -2639,4 +2844,5 @@ EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
          *pVerMajor = pFileInfo->dwProductVersionMS & 0xFFFF;
      }
      delete[] pAlloc;

@@ -18,6 +18,7 @@
  */
 #include <libdragon.h>
 #include <malloc.h>
+#include <unistd.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -31,7 +32,7 @@ extern const char *gta2_frame_text_pool(void); /* frame_n64.cpp: frases do quadr
 typedef struct { float x, y, w, u, v; uint32_t rgba; } FVert;                              /* = FrameVertex (render/frame.h) */
 typedef struct { uint32_t kind, texture, blend, first, count, colour; int32_t rect[4]; } FCmd; /* = FrameCommand */
 
-#define CACHE_N     256           /* captura no desenho: copias do mesmo quadro precisam coexistir (256 x 4 KB = 1 MB) */
+#define CACHE_N     N64_CACHE_N   /* captura no desenho: copias do mesmo quadro precisam coexistir (192 x 4 KB = 768 KB; pico medido ~135 em uso) */
 #define SLOT_U16    2048          /* 4096 bytes por entrada = TMEM inteira em RGBA16 */
 #define MAX_TEXELS  2048
 
@@ -54,12 +55,14 @@ static uint32_t g_ublk_pend_f[UBLK_PEND_N];
 static int g_ublk_npend;
 static rspq_block_t *g_ublk[CACHE_N];
 static uint8_t g_ublk_n[CACHE_N];
+static int g_ublk_live;
 static void ublk_release(int slot)
 {
     rspq_block_t *b = g_ublk[slot];
     g_ublk_n[slot] = 0;
     if (!b) return;
     g_ublk[slot] = NULL;
+    --g_ublk_live;
     if (g_ublk_npend >= UBLK_PEND_N) {
         rspq_wait();
         for (int i = 0; i < g_ublk_npend; ++i) rspq_block_free(g_ublk_pend[i]);
@@ -70,8 +73,16 @@ static void ublk_release(int slot)
     ++g_ublk_npend;
 }
 /* 1 se ha memoria folgada para gravar um bloco (o rdpq aborta o jogo com 'Out of memory' se faltar no meio da gravacao) */
+/* RESERVA para o motor: os blocos de upload/texto sao so cache de velocidade e nao podem comer a folga que o jogo precisa para alocar
+ * em tempo de execucao (texturas sob demanda, scripts, sons): sem isso o heap enchia aos poucos e o motor abortava com 'Out of memory'. */
+#ifndef N64_HEAP_RESERVE_KB
+#define N64_HEAP_RESERVE_KB 320
+#endif
+#define UBLK_MAX_LIVE 128 /* blocos de upload vivos ao mesmo tempo (~2,4 KB cada) */
+extern char *__heap_top;
 static int heap_has_room(void)
 {
+    if ((long)(__heap_top - (char *)sbrk(0)) < (long)N64_HEAP_RESERVE_KB * 1024) return 0; /* a folga ainda nao pedida ao sistema (apos o fim do heap atual) */
     void *p = malloc(24 * 1024);
     if (!p) return 0;
     free(p);
@@ -293,7 +304,7 @@ static int tex_slot(N64Tex *t, float scale, int additive)
         for (int i = 1; i < 256; ++i) {
             const uint32_t c = prgb[i];
             const unsigned r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
-            p16[i] = (additive && r + g + b < ADD_CUT) ? 0 : (uint16_t)(((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | 1);
+            p16[i] = ((additive && r + g + b < ADD_CUT) || (i == 1 && t->key1)) ? 0 : (uint16_t)(((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | 1);
         }
         unsigned orv = 0, andv = 1;
         for (int y = 0; y < th; ++y) {
@@ -326,7 +337,7 @@ static int tex_slot(N64Tex *t, float scale, int additive)
                 const uint8_t *row = src + (size_t)yy * 256;
                 for (int xx = x0; xx < x1; ++xx) {
                     const uint8_t idx = row[xx];
-                    if (idx) {
+                    if (idx && !(idx == 1 && t->key1)) {
                         const uint32_t c = prgb[idx];
                         sr += (c >> 16) & 255; sg += (c >> 8) & 255; sb += c & 255; ++n;
                     }
@@ -645,11 +656,11 @@ static void draw_cmd(const FCmd *cm, const FVert *verts, float sx, float sy, int
             if (g_ublk[slot] && !s_rec) {
                 rspq_block_run(g_ublk[slot]);
 
-            } else if (!s_rec && g_ublk_n[slot] < 255 && ++g_ublk_n[slot] >= 2 && heap_has_room()) {
+            } else if (!s_rec && g_ublk_n[slot] < 255 && ++g_ublk_n[slot] >= 2 && g_ublk_live < UBLK_MAX_LIVE && heap_has_room()) {
                 rspq_block_begin();
                 rdpq_tex_upload(TILE0, &surf, NULL);
                 rspq_block_t *ub = rspq_block_end();
-                if (ub) { g_ublk[slot] = ub; rspq_block_run(ub); }
+                if (ub) { g_ublk[slot] = ub; ++g_ublk_live; rspq_block_run(ub); }
                 else rdpq_tex_upload(TILE0, &surf, NULL);
             } else
 #endif
@@ -852,6 +863,11 @@ void gta2_n64_present(const void *cmds_, int cmdCount, const void *verts_, int v
 
     rdpq_detach_show();
     ++g_frames;
+#ifdef N64_MEMLOG
+    { static unsigned peak; unsigned n = 0, cur = 0, wasted = 0; for (int i = 0; i < CACHE_N; ++i) { if (g_c[i].used && g_frames - g_c[i].used < CACHE_GUARD) { ++n; wasted += 4096 - (unsigned)g_c[i].pw * g_c[i].th * 2; } if (g_c[i].used) ++cur; }
+      if (n > peak) { peak = n; }
+      if ((g_frames % 120) == 0) { unsigned nb = 0; for (int i = 0; i < CACHE_N; ++i) if (g_ublk[i]) ++nb; debugf("[tcache] inuse=%u peak=%u everused=%u wasted=%uKB ublk=%u live=%d headroom=%ldKB\n", n, peak, cur, wasted / 1024, nb, g_ublk_live, (long)(__heap_top - (char *)sbrk(0)) / 1024); } }
+#endif
     gta2_n64_audio_poll();
 #if PACE_ENABLE
     { /* limitador de ritmo: ver comentario de PACE_TICK_MS. O tempo de espera conta como "espera", nao como desenho */

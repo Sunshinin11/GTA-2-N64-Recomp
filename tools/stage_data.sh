@@ -6,6 +6,15 @@
 src="$1"; out="$2"; shift 2
 here="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$out/data"
+# p.gxt (portugues do Brasil) nao existe no jogo original: se faltar na pasta de dados, gera a partir do e.gxt + tools/pt_br.tsv
+if [ -z "$(find "$src" -maxdepth 1 -iname p.gxt | head -1)" ]; then
+  e_gxt=$(find "$src" -maxdepth 1 -iname e.gxt | head -1)
+  if [ -n "$e_gxt" ] && python3 "$here/make_pt_gxt.py" "$e_gxt" "$src/p.gxt" "$here/pt_br.tsv"; then
+    echo "    [PT-BR] p.gxt gerado em $src"
+  else
+    echo "AVISO: nao foi possivel gerar o p.gxt (idioma portugues desativado)"
+  fi
+fi
 # radios: taxa e qualidade. Se mudar (arquivo de marca diferente), TODAS as radios sao reconvertidas.
 RADIO_RATE="${RADIO_RATE:-12000}"        # 12 kHz; 8000 = ainda menor (ex.: RADIO_RATE=8000 make ...)
 RADIO_QUALITY="${RADIO_QUALITY:-35}"

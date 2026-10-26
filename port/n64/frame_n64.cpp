@@ -1,6 +1,7 @@
 // Gerado de gta2-browser/port por tools/gen_n64_platform.py e adaptado para N64 (sem emscripten).
 // Draw-list storage and presentation (see frame.h).
 #include "render/frame.h"
+#include "render/n64tex.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -87,7 +88,7 @@ constexpr uint32_t kTxtMinVerts = 48;   // menos de 8 letras: nao compensa
 constexpr int kTxtMaxCmds = 48;         // texturas distintas por frase
 constexpr int kTxtEntries = 8;
 constexpr uint32_t kTokBase = 0x10000u; // mesmo valor de TEX_TOKEN_BASE (render_n64.c)
-constexpr uint32_t kTokCount = 256u;    // mesmo valor de CACHE_N (render_n64.c)
+constexpr uint32_t kTokCount = N64_CACHE_N; // mesmo valor de CACHE_N (render_n64.c)
 
 struct TxtCmd
 {

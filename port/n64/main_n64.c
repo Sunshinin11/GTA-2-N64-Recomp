@@ -169,6 +169,9 @@ int main(void)
     {
         poll_input();
         const int r = gta2_game_frame();
+#ifdef N64_MEMLOG
+        { static unsigned fr; if ((++fr % 10) == 0) { struct mallinfo mi = mallinfo(); { extern unsigned g_smallN, g_smallB; { extern char *__heap_end, *__heap_top; extern uint32_t gta2_n64_frames(void); debugf("[mem] f=%u pres=%u arena=%d used=%d free=%d brk=%p sp=%p heap_end=%p heap_top=%p\n", fr, (unsigned)gta2_n64_frames(), mi.arena, mi.uordblks, mi.fordblks, sbrk(0), (void*)&mi, (void*)__heap_end, (void*)__heap_top); } (void)g_smallN; (void)g_smallB; } } }
+#endif
         if (r != -1)
         {
             printf("Jogo terminou: codigo %d\n", r);
@@ -221,3 +224,18 @@ const void *gta2_n64_rom_ptr(const char *romPath, unsigned offset)
     if (phys < 0x10000000u) phys += 0x10000000u;      /* veio como offset na ROM */
     return (const void *)(uintptr_t)(0xA0000000u | (phys + offset));
 }
+
+#ifdef N64_MEMTRACE
+void gta2_n64_dbg_mm(unsigned n, void *ra) { debugf("[mm] %u ra=%p\n", n, ra); }
+/* depuracao: registra alocacoes grandes (>= 16 KB) com o endereco de quem chamou (build com -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc) */
+#include <stdlib.h>
+void *__real_malloc(size_t n); void *__real_calloc(size_t a, size_t b); void *__real_realloc(void *p, size_t n);
+unsigned g_smallN, g_smallB;
+void *__wrap_malloc(size_t n) { void *p = __real_malloc(n); if (n < 512) { g_smallN++; g_smallB += n; } if (n >= 512) debugf("[big] malloc %u -> %p ra=%p\n", (unsigned)n, p, __builtin_return_address(0)); return p; }
+void *__wrap_calloc(size_t a, size_t b) { void *p = __real_calloc(a, b); if (a * b < 512) { g_smallN++; g_smallB += a * b; } if (a * b >= 512) debugf("[big] calloc %u -> %p ra=%p\n", (unsigned)(a * b), p, __builtin_return_address(0)); return p; }
+void *__wrap_realloc(void *q, size_t n) { void *p = __real_realloc(q, n); if (n >= 512) debugf("[big] realloc %u -> %p ra=%p\n", (unsigned)n, p, __builtin_return_address(0)); return p; }
+void *__real_memalign(size_t a, size_t n); void *__real_malloc_uncached(size_t n); void *__real_malloc_uncached_aligned(int a, size_t n);
+void *__wrap_memalign(size_t a, size_t n) { void *p = __real_memalign(a, n); debugf("[big] memalign %u -> %p ra=%p\n", (unsigned)n, p, __builtin_return_address(0)); return p; }
+void *__wrap_malloc_uncached(size_t n) { void *p = __real_malloc_uncached(n); debugf("[big] uncached %u -> %p ra=%p\n", (unsigned)n, p, __builtin_return_address(0)); return p; }
+void *__wrap_malloc_uncached_aligned(int a, size_t n) { void *p = __real_malloc_uncached_aligned(a, n); debugf("[big] uncached_al %u -> %p ra=%p\n", (unsigned)n, p, __builtin_return_address(0)); return p; }
+#endif
